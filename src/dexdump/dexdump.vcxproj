@@ -45,7 +45,7 @@
     <OutDir>$(SolutionDir)$(Configuration)\</OutDir>
     <IntDir>$(Configuration)\</IntDir>
     <LinkIncremental>true</LinkIncremental>
-    <LibraryPath>C:\Program Files (x86)\Windows Kits\10\Include\10.0.10150.0\ucrt;$(LibraryPath)</LibraryPath>
+    <IncludePath>C:\Users\Maxence\Documents\GitHub\DexGraph\src\TreeConstructor;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>$(SolutionDir)$(Configuration)\</OutDir>
@@ -58,7 +58,7 @@
       <InlineFunctionExpansion>Default</InlineFunctionExpansion>
       <IntrinsicFunctions>false</IntrinsicFunctions>
       <WholeProgramOptimization>false</WholeProgramOptimization>
-      <AdditionalIncludeDirectories>../;../msvc;C:\Program Files (x86)\Windows Kits\10\Include\10.0.10150.0\ucrt;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../;../msvc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <MinimalRebuild>true</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
@@ -100,6 +100,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\..\..\Desktop\Projet3A\dexdump\TreeConstructor\TCOutputHelper.cpp" />
     <ClCompile Include="..\libdex\CmdUtils.cpp" />
     <ClCompile Include="..\libdex\DexCatch.cpp" />
     <ClCompile Include="..\libdex\DexClass.cpp" />
@@ -114,11 +115,11 @@
     <ClCompile Include="..\libdex\SysUtil.cpp" />
     <ClCompile Include="..\libdex\ZipArchive.cpp" />
     <ClCompile Include="..\msvc\getopt.c" />
-    <ClCompile Include="..\TreeConstructor\TCOutputHelper.cpp" />
     <ClCompile Include="DexDump.cpp" />
     <ClCompile Include="OpCodeNames.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\..\..\Desktop\Projet3A\dexdump\TreeConstructor\TCOutputHelper.h" />
     <ClInclude Include="..\libdex\CmdUtils.h" />
     <ClInclude Include="..\libdex\DexCatch.h" />
     <ClInclude Include="..\libdex\DexClass.h" />
@@ -134,7 +135,6 @@
     <ClInclude Include="..\libdex\ZipArchive.h" />
     <ClInclude Include="..\msvc\getopt.h" />
     <ClInclude Include="OpCodeNames.h" />
-    <ClInclude Include="TreeConstructor\TCOutputHelper.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

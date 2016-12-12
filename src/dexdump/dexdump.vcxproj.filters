@@ -63,7 +63,7 @@
     <ClCompile Include="..\libdex\ZipArchive.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\TreeConstructor\TCOutputHelper.cpp">
+    <ClCompile Include="..\..\..\..\..\Desktop\Projet3A\dexdump\TreeConstructor\TCOutputHelper.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -113,7 +113,7 @@
     <ClInclude Include="..\libdex\ZipArchive.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="TreeConstructor\TCOutputHelper.h">
+    <ClInclude Include="..\..\..\..\..\Desktop\Projet3A\dexdump\TreeConstructor\TCOutputHelper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
