@@ -1,5 +1,6 @@
 c:\users\maxence\documents\github\dexgraph\src\dexdump\debug\vc140.pdb
 c:\users\maxence\documents\github\dexgraph\src\dexdump\debug\vc140.idb
+c:\users\maxence\documents\github\dexgraph\src\dexdump\debug\tcoutputhelper.obj
 c:\users\maxence\documents\github\dexgraph\src\dexdump\debug\cmdutils.obj
 c:\users\maxence\documents\github\dexgraph\src\dexdump\debug\dexcatch.obj
 c:\users\maxence\documents\github\dexgraph\src\dexdump\debug\dexclass.obj
@@ -16,6 +17,8 @@ c:\users\maxence\documents\github\dexgraph\src\dexdump\debug\ziparchive.obj
 c:\users\maxence\documents\github\dexgraph\src\dexdump\debug\dexdump.obj
 c:\users\maxence\documents\github\dexgraph\src\dexdump\debug\getopt.obj
 c:\users\maxence\documents\github\dexgraph\src\dexdump\debug\opcodenames.obj
+c:\users\maxence\documents\github\dexgraph\src\dexdump\debug\dexdump.exe
+c:\users\maxence\documents\github\dexgraph\src\dexdump\debug\dexdump.pdb
 c:\users\maxence\documents\github\dexgraph\src\dexdump\debug\dexdump.tlog\cl.command.1.tlog
 c:\users\maxence\documents\github\dexgraph\src\dexdump\debug\dexdump.tlog\cl.read.1.tlog
 c:\users\maxence\documents\github\dexgraph\src\dexdump\debug\dexdump.tlog\cl.write.1.tlog

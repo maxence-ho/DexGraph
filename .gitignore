@@ -27,3 +27,6 @@
 *.exe
 *.out
 *.app
+
+# Debug folder
+src/dexdump/Debug
