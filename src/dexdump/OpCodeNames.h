@@ -15,19 +15,19 @@
  */
 /*
  * Dalvik opcode names.
- */ 
+ */
 #ifndef _DEXDUMP_OPCODENAMES
 #define _DEXDUMP_OPCODENAMES
 
 #include "libdex/OpCode.h"
 
-#ifdef __cplusplus 
-extern "C" { 
+#ifdef __cplusplus
+extern "C" {
 #endif
 
 const char* getOpcodeName(OpCode op);
 
-#ifdef __cplusplus 
+#ifdef __cplusplus
 }
 #endif
 
