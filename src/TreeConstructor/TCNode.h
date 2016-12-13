@@ -15,8 +15,8 @@ struct Node
 
   Node() {};
   Node(uint32_t _baseAddr,
-	   char _opcode,
-	   std::string _instructions);
+	     char _opcode,
+	     std::string _instructions);
 
   void copy(Node const& node);
   void pretty_print() const;
@@ -24,5 +24,5 @@ struct Node
 };
 
 void append_node_to(Node& parent_node,
-				    Node const& child_node);
+        				    Node const& child_node);
 }

@@ -607,611 +607,547 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
 	auto const margin_str = std::string(4, ' ');
 	std::string buff_str;
 
-	std::stringstream instructions;
 	std::stringstream node_insns;
 
-    const u2* insns = pCode->insns;
-    int i;
+  const u2* insns = pCode->insns;
+  int i;
 
-    printf("%06x:", ((u1*)insns - pDexFile->baseAddr) + insnIdx*2);
-	// Modified Tool
-	tc_str_format(buff_str, "%06x:", ((u1*)insns - pDexFile->baseAddr) + insnIdx * 2);
-	instructions << margin_str << buff_str << " ";
-    for (i = 0; i < 8; i++) {
-        if (i < insnWidth) {
-            if (i == 7) {
-                printf(" ... ");
-            } else {
-                /* print 16-bit value in little-endian order */
-                const u1* bytePtr = (const u1*) &insns[insnIdx+i];
-                printf(" %02x%02x", bytePtr[0], bytePtr[1]);
-				// Modified Tool
-				tc_str_format(buff_str, " %02x%02x", bytePtr[0], bytePtr[1]);
-				instructions << margin_str << buff_str << " ";
-            }
-        } else {
-            fputs("     ", stdout);
-        }
-    }
-    
-	if (pDecInsn->opCode == OP_NOP) {
-        u2 instr = get2LE((const u1*) &insns[insnIdx]);
-        if (instr == kPackedSwitchSignature) {
-            printf("|%04x: packed-switch-data (%d units)",
-                insnIdx, insnWidth);
-			// Modified Tool
-			tc_str_format(buff_str, "%04x: packed-switch-data (%d units)",
-				insnIdx, insnWidth);
-			instructions << margin_str << "|" << buff_str << " ";
-			node_insns << buff_str;
-        } else if (instr == kSparseSwitchSignature) {
-            printf("|%04x: sparse-switch-data (%d units)",
-                insnIdx, insnWidth);
-			// Modified Tool
-			tc_str_format(buff_str, "%04x: sparse-switch-data (%d units)",
-				insnIdx, insnWidth);
-			instructions << margin_str << "|" << buff_str << " ";
-			node_insns << buff_str;
-        } else if (instr == kArrayDataSignature) {
-            printf("|%04x: array-data (%d units)",
-                insnIdx, insnWidth);
-			// Modified Tool
-			tc_str_format(buff_str, "%04x: array-data (%d units)",
-				insnIdx, insnWidth);
-			instructions << margin_str << "|" << buff_str << " ";
-			node_insns << buff_str;
-        } else {
-            printf("|%04x: nop // spacer", insnIdx);
-			// Modified Tool
-			tc_str_format(buff_str, "%04x: nop // spacer", insnIdx);
-			instructions << margin_str << "|" << buff_str << " ";
-			node_insns << buff_str;
-        }
+  printf("%06x:", ((u1*)insns - pDexFile->baseAddr) + insnIdx*2);
+  // Modified Tool
+  for (i = 0; i < 8; i++) {
+      if (i < insnWidth) {
+          if (i == 7) {
+              printf(" ... ");
+          } else {
+              /* print 16-bit value in little-endian order */
+              const u1* bytePtr = (const u1*) &insns[insnIdx+i];
+              printf(" %02x%02x", bytePtr[0], bytePtr[1]);
+          }
+      } else {
+          fputs("     ", stdout);
+      }
+  }
+
+  if (pDecInsn->opCode == OP_NOP) {
+    u2 instr = get2LE((const u1 *)&insns[insnIdx]);
+    if (instr == kPackedSwitchSignature) {
+      printf("|%04x: packed-switch-data (%d units)", insnIdx, insnWidth);
+      // Modified Tool
+      tc_str_format(buff_str, "%04x: packed-switch-data (%d units)", insnIdx,
+                    insnWidth);
+      node_insns << buff_str;
+    } else if (instr == kSparseSwitchSignature) {
+      printf("|%04x: sparse-switch-data (%d units)", insnIdx, insnWidth);
+      // Modified Tool
+      tc_str_format(buff_str, "%04x: sparse-switch-data (%d units)", insnIdx,
+                    insnWidth);
+      node_insns << buff_str;
+    } else if (instr == kArrayDataSignature) {
+      printf("|%04x: array-data (%d units)", insnIdx, insnWidth);
+      // Modified Tool
+      tc_str_format(buff_str, "%04x: array-data (%d units)", insnIdx,
+                    insnWidth);
+      node_insns << buff_str;
     } else {
-        printf("|%04x: %s", insnIdx, getOpcodeName(pDecInsn->opCode));
-		// Modified Tool
-		tc_str_format(buff_str, "%04x: %s", insnIdx, getOpcodeName(pDecInsn->opCode));
-		instructions << margin_str << "|" << buff_str << " ";
-		node_insns << buff_str;
+      printf("|%04x: nop // spacer", insnIdx);
+      // Modified Tool
+      tc_str_format(buff_str, "%04x: nop // spacer", insnIdx);
+      node_insns << buff_str;
     }
+  } else {
+    printf("|%04x: %s", insnIdx, getOpcodeName(pDecInsn->opCode));
+    // Modified Tool
+    tc_str_format(buff_str, "%04x: %s", insnIdx,
+                  getOpcodeName(pDecInsn->opCode));
+    node_insns << buff_str;
+  }
 
-    switch (dexGetInstrFormat(gInstrFormat, pDecInsn->opCode)) {
-    case kFmt10x:        // op
-        break;
-    case kFmt12x:        // op vA, vB
-        printf(" v%d, v%d", pDecInsn->vA, pDecInsn->vB);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
+  switch (dexGetInstrFormat(gInstrFormat, pDecInsn->opCode)) {
+  case kFmt10x: // op
+    break;
+  case kFmt12x: // op vA, vB
+  {
+    printf(" v%d, v%d", pDecInsn->vA, pDecInsn->vB);
+    // Modified Tool
+    tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
+    node_insns << buff_str;
+    break;
+    } 
     case kFmt11n:        // op vA, #+B
-        printf(" v%d, #int %d // #%x",
-            pDecInsn->vA, (s4)pDecInsn->vB, (u1)pDecInsn->vB);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, #int %d // #%x",
-			pDecInsn->vA, (s4)pDecInsn->vB, (u1)pDecInsn->vB);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt11x:        // op vAA
-        printf(" v%d", pDecInsn->vA);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d", pDecInsn->vA);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
+    {
+      printf(" v%d, #int %d // #%x", pDecInsn->vA, (s4)pDecInsn->vB,
+             (u1)pDecInsn->vB);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d, #int %d // #%x", pDecInsn->vA,
+                    (s4)pDecInsn->vB, (u1)pDecInsn->vB);
+      node_insns << buff_str;
+      break;
+    }
+    case kFmt11x: // op vAA
+    {
+      printf(" v%d", pDecInsn->vA);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d", pDecInsn->vA);
+      node_insns << buff_str;
+      break;
+    }
     case kFmt10t:        // op +AA
     case kFmt20t:        // op +AAAA
-        {
-            s4 targ = (s4) pDecInsn->vA;
-            printf(" %04x // %c%04x",
-                insnIdx + targ,
-                (targ < 0) ? '-' : '+',
-                (targ < 0) ? -targ : targ);
-			// Modified Tool
-			tc_str_format(buff_str, " %04x // %c%04x",
-				insnIdx + targ,
-				(targ < 0) ? '-' : '+',
-				(targ < 0) ? -targ : targ);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
-        }
-        break;
-    case kFmt22x:        // op vAA, vBBBB
-        printf(" v%d, v%d", pDecInsn->vA, pDecInsn->vB);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt21t:        // op vAA, +BBBB
-        {
-            s4 targ = (s4) pDecInsn->vB;
-            printf(" v%d, %04x // %c%04x", pDecInsn->vA,
-                insnIdx + targ,
-                (targ < 0) ? '-' : '+',
-                (targ < 0) ? -targ : targ);
-			// Modified Tool
-			tc_str_format(buff_str, " v%d, %04x // %c%04x", pDecInsn->vA,
-				insnIdx + targ,
-				(targ < 0) ? '-' : '+',
-				(targ < 0) ? -targ : targ);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
-        }
-        break;
-    case kFmt21s:        // op vAA, #+BBBB
-        printf(" v%d, #int %d // #%x",
-            pDecInsn->vA, (s4)pDecInsn->vB, (u2)pDecInsn->vB);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, #int %d // #%x",
-			pDecInsn->vA, (s4)pDecInsn->vB, (u2)pDecInsn->vB);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt21h:        // op vAA, #+BBBB0000[00000000]
-        // The printed format varies a bit based on the actual opcode.
-        if (pDecInsn->opCode == OP_CONST_HIGH16) {
-            s4 value = pDecInsn->vB << 16;
-            printf(" v%d, #int %d // #%x",
-                pDecInsn->vA, value, (u2)pDecInsn->vB);
-			// Modified Tool
-			tc_str_format(buff_str, " v%d, #int %d // #%x",
-				pDecInsn->vA, value, (u2)pDecInsn->vB);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
+    {
+      s4 targ = (s4)pDecInsn->vA;
+      printf(" %04x // %c%04x", insnIdx + targ, (targ < 0) ? '-' : '+',
+             (targ < 0) ? -targ : targ);
+      // Modified Tool
+      tc_str_format(buff_str, " %04x // %c%04x", insnIdx + targ,
+                    (targ < 0) ? '-' : '+', (targ < 0) ? -targ : targ);
+      node_insns << buff_str;
+      break;
+    }
+    case kFmt22x: // op vAA, vBBBB
+    {
+      printf(" v%d, v%d", pDecInsn->vA, pDecInsn->vB);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
+      node_insns << buff_str;
+      break;
+    }
+    case kFmt21t: // op vAA, +BBBB
+    {
+      s4 targ = (s4)pDecInsn->vB;
+      printf(" v%d, %04x // %c%04x", pDecInsn->vA, insnIdx + targ,
+             (targ < 0) ? '-' : '+', (targ < 0) ? -targ : targ);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d, %04x // %c%04x", pDecInsn->vA,
+                    insnIdx + targ, (targ < 0) ? '-' : '+',
+                    (targ < 0) ? -targ : targ);
+      node_insns << buff_str;
+      break;
+    }
+    case kFmt21s: // op vAA, #+BBBB
+    {
+      printf(" v%d, #int %d // #%x", pDecInsn->vA, (s4)pDecInsn->vB,
+             (u2)pDecInsn->vB);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d, #int %d // #%x", pDecInsn->vA,
+                    (s4)pDecInsn->vB, (u2)pDecInsn->vB);
+      node_insns << buff_str;
+      break;
+    }
+    case kFmt21h: // op vAA, #+BBBB0000[00000000]
+    {
+      // The printed format varies a bit based on the actual opcode.
+      if (pDecInsn->opCode == OP_CONST_HIGH16) {
+        s4 value = pDecInsn->vB << 16;
+        printf(" v%d, #int %d // #%x", pDecInsn->vA, value, (u2)pDecInsn->vB);
+        // Modified Tool
+        tc_str_format(buff_str, " v%d, #int %d // #%x", pDecInsn->vA, value,
+                      (u2)pDecInsn->vB);
+        node_insns << buff_str;
+      } else {
+        s8 value = ((s8)pDecInsn->vB) << 48;
+        printf(" v%d, #long %lld // #%x", pDecInsn->vA, value,
+               (u2)pDecInsn->vB);
+        // Modified Tool
+        tc_str_format(buff_str, " v%d, #long %lld // #%x", pDecInsn->vA, value,
+                      (u2)pDecInsn->vB);
+        node_insns << buff_str;
+      }
+      break;
+    }
+    case kFmt21c: // op vAA, thing@BBBB
+    {
+      if (pDecInsn->opCode == OP_CONST_STRING) {
+        printf(" v%d, \"%s\" // string@%04x", pDecInsn->vA,
+               dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
+        // Modified Tool
+        tc_str_format(buff_str, " v%d, \"%s\" // string@%04x", pDecInsn->vA,
+                      dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
+        node_insns << buff_str;
+      } else if (pDecInsn->opCode == OP_CHECK_CAST ||
+                 pDecInsn->opCode == OP_NEW_INSTANCE ||
+                 pDecInsn->opCode == OP_CONST_CLASS) {
+        printf(" v%d, %s // class@%04x", pDecInsn->vA,
+               getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
+        // Modified Tool
+        tc_str_format(buff_str, " v%d, %s // class@%04x", pDecInsn->vA,
+                      getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
+        node_insns << buff_str;
+      } else /* OP_SGET* */ {
+        FieldMethodInfo fieldInfo;
+        if (getFieldInfo(pDexFile, pDecInsn->vB, &fieldInfo)) {
+          printf(" v%d, %s.%s:%s // field@%04x", pDecInsn->vA,
+                 fieldInfo.classDescriptor, fieldInfo.name, fieldInfo.signature,
+                 pDecInsn->vB);
+          // Modified Tool
+          tc_str_format(buff_str, " v%d, %s.%s:%s // field@%04x", pDecInsn->vA,
+                        fieldInfo.classDescriptor, fieldInfo.name,
+                        fieldInfo.signature, pDecInsn->vB);
+          node_insns << buff_str;
         } else {
-            s8 value = ((s8) pDecInsn->vB) << 48;
-            printf(" v%d, #long %lld // #%x",
-                pDecInsn->vA, value, (u2)pDecInsn->vB);
-			// Modified Tool
-			tc_str_format(buff_str, " v%d, #long %lld // #%x",
-				pDecInsn->vA, value, (u2)pDecInsn->vB);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
+          printf(" v%d, ??? // field@%04x", pDecInsn->vA, pDecInsn->vB);
+          // Modified Tool
+          tc_str_format(buff_str, " v%d, ??? // field@%04x", pDecInsn->vA,
+                        pDecInsn->vB);
+          node_insns << buff_str;
         }
-        break;
-    case kFmt21c:        // op vAA, thing@BBBB
-        if (pDecInsn->opCode == OP_CONST_STRING) {
-            printf(" v%d, \"%s\" // string@%04x", pDecInsn->vA,
-                dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
-			// Modified Tool
-			tc_str_format(buff_str, " v%d, \"%s\" // string@%04x", pDecInsn->vA,
-				dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
-        } else if (pDecInsn->opCode == OP_CHECK_CAST ||
-                   pDecInsn->opCode == OP_NEW_INSTANCE ||
-                   pDecInsn->opCode == OP_CONST_CLASS)
-        {
-            printf(" v%d, %s // class@%04x", pDecInsn->vA,
-                getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
-			// Modified Tool
-			tc_str_format(buff_str, " v%d, %s // class@%04x", pDecInsn->vA,
-				getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
-        } else /* OP_SGET* */ {
-            FieldMethodInfo fieldInfo;
-            if (getFieldInfo(pDexFile, pDecInsn->vB, &fieldInfo)) {
-                printf(" v%d, %s.%s:%s // field@%04x", pDecInsn->vA,
-                    fieldInfo.classDescriptor, fieldInfo.name,
-                    fieldInfo.signature, pDecInsn->vB);
-				// Modified Tool
-				tc_str_format(buff_str, " v%d, %s.%s:%s // field@%04x", pDecInsn->vA,
-					fieldInfo.classDescriptor, fieldInfo.name,
-					fieldInfo.signature, pDecInsn->vB);
-				instructions << margin_str << buff_str << " ";
-				node_insns << buff_str;
-            } else {
-                printf(" v%d, ??? // field@%04x", pDecInsn->vA, pDecInsn->vB);
-				// Modified Tool
-				tc_str_format(buff_str, " v%d, ??? // field@%04x", pDecInsn->vA, pDecInsn->vB);
-				instructions << margin_str << buff_str << " ";
-				node_insns << buff_str;
-            }
+      }
+      break;
+    }
+    case kFmt23x: // op vAA, vBB, vCC
+    {
+      printf(" v%d, v%d, v%d", pDecInsn->vA, pDecInsn->vB, pDecInsn->vC);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d, v%d, v%d", pDecInsn->vA, pDecInsn->vB,
+                    pDecInsn->vC);
+      node_insns << buff_str;
+      break;
+    }
+    case kFmt22b: // op vAA, vBB, #+CC
+    {
+      printf(" v%d, v%d, #int %d // #%02x", pDecInsn->vA, pDecInsn->vB,
+             (s4)pDecInsn->vC, (u1)pDecInsn->vC);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d, v%d, #int %d // #%02x", pDecInsn->vA,
+                    pDecInsn->vB, (s4)pDecInsn->vC, (u1)pDecInsn->vC);
+      node_insns << buff_str;
+      break;
+    }
+    case kFmt22t: // op vA, vB, +CCCC
+    {
+      s4 targ = (s4)pDecInsn->vC;
+      printf(" v%d, v%d, %04x // %c%04x", pDecInsn->vA, pDecInsn->vB,
+             insnIdx + targ, (targ < 0) ? '-' : '+', (targ < 0) ? -targ : targ);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d, v%d, %04x // %c%04x", pDecInsn->vA,
+                    pDecInsn->vB, insnIdx + targ, (targ < 0) ? '-' : '+',
+                    (targ < 0) ? -targ : targ);
+      node_insns << buff_str;
+      break;
+    }
+    case kFmt22s: // op vA, vB, #+CCCC
+    {
+      printf(" v%d, v%d, #int %d // #%04x", pDecInsn->vA, pDecInsn->vB,
+             (s4)pDecInsn->vC, (u2)pDecInsn->vC);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d, v%d, #int %d // #%04x", pDecInsn->vA,
+                    pDecInsn->vB, (s4)pDecInsn->vC, (u2)pDecInsn->vC);
+      node_insns << buff_str;
+      break;
+    }
+    case kFmt22c: // op vA, vB, thing@CCCC
+    {
+      if (pDecInsn->opCode >= OP_IGET && pDecInsn->opCode <= OP_IPUT_SHORT) {
+        FieldMethodInfo fieldInfo;
+        if (getFieldInfo(pDexFile, pDecInsn->vC, &fieldInfo)) {
+          printf(" v%d, v%d, %s.%s:%s // field@%04x", pDecInsn->vA,
+                 pDecInsn->vB, fieldInfo.classDescriptor, fieldInfo.name,
+                 fieldInfo.signature, pDecInsn->vC);
+          // Modified Tool
+          tc_str_format(buff_str, " v%d, v%d, %s.%s:%s // field@%04x",
+                        pDecInsn->vA, pDecInsn->vB, fieldInfo.classDescriptor,
+                        fieldInfo.name, fieldInfo.signature, pDecInsn->vC);
+          node_insns << buff_str;
+        } else {
+          printf(" v%d, v%d, ??? // field@%04x", pDecInsn->vA, pDecInsn->vB,
+                 pDecInsn->vC);
+          // Modified Tool
+          tc_str_format(buff_str, " v%d, v%d, ??? // field@%04x", pDecInsn->vA,
+                        pDecInsn->vB, pDecInsn->vC);
+          node_insns << buff_str;
         }
-        break;
-    case kFmt23x:        // op vAA, vBB, vCC
-        printf(" v%d, v%d, v%d", pDecInsn->vA, pDecInsn->vB, pDecInsn->vC);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, v%d, v%d", pDecInsn->vA, pDecInsn->vB, pDecInsn->vC);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt22b:        // op vAA, vBB, #+CC
-        printf(" v%d, v%d, #int %d // #%02x",
-            pDecInsn->vA, pDecInsn->vB, (s4)pDecInsn->vC, (u1)pDecInsn->vC);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, v%d, #int %d // #%02x",
-			pDecInsn->vA, pDecInsn->vB, (s4)pDecInsn->vC, (u1)pDecInsn->vC);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt22t:        // op vA, vB, +CCCC
-        {
-            s4 targ = (s4) pDecInsn->vC;
-            printf(" v%d, v%d, %04x // %c%04x", pDecInsn->vA, pDecInsn->vB,
-                insnIdx + targ,
-                (targ < 0) ? '-' : '+',
-                (targ < 0) ? -targ : targ);
-			// Modified Tool
-			tc_str_format(buff_str, " v%d, v%d, %04x // %c%04x", pDecInsn->vA, pDecInsn->vB,
-				insnIdx + targ,
-				(targ < 0) ? '-' : '+',
-				(targ < 0) ? -targ : targ);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
-        }
-        break;
-    case kFmt22s:        // op vA, vB, #+CCCC
-        printf(" v%d, v%d, #int %d // #%04x",
-            pDecInsn->vA, pDecInsn->vB, (s4)pDecInsn->vC, (u2)pDecInsn->vC);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, v%d, #int %d // #%04x",
-			pDecInsn->vA, pDecInsn->vB, (s4)pDecInsn->vC, (u2)pDecInsn->vC);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt22c:        // op vA, vB, thing@CCCC
-        if (pDecInsn->opCode >= OP_IGET && pDecInsn->opCode <= OP_IPUT_SHORT) {
-            FieldMethodInfo fieldInfo;
-            if (getFieldInfo(pDexFile, pDecInsn->vC, &fieldInfo)) {
-                printf(" v%d, v%d, %s.%s:%s // field@%04x", pDecInsn->vA,
-                    pDecInsn->vB, fieldInfo.classDescriptor, fieldInfo.name,
-                    fieldInfo.signature, pDecInsn->vC);
-				// Modified Tool
-				tc_str_format(buff_str, " v%d, v%d, %s.%s:%s // field@%04x", pDecInsn->vA,
-					pDecInsn->vB, fieldInfo.classDescriptor, fieldInfo.name,
-					fieldInfo.signature, pDecInsn->vC);
-				instructions << margin_str << buff_str << " ";
-				node_insns << buff_str;
-            } else {
-                printf(" v%d, v%d, ??? // field@%04x", pDecInsn->vA,
+      } else {
+        printf(" v%d, v%d, %s // class@%04x", pDecInsn->vA, pDecInsn->vB,
+               getClassDescriptor(pDexFile, pDecInsn->vC), pDecInsn->vC);
+        // Modified Tool
+        tc_str_format(buff_str, " v%d, v%d, %s // class@%04x", pDecInsn->vA,
+                      pDecInsn->vB, getClassDescriptor(pDexFile, pDecInsn->vC),
+                      pDecInsn->vC);
+        node_insns << buff_str;
+      }
+      break;
+    }
+    case kFmt22cs: // [opt] op vA, vB, field offset CCCC
+    {
+      printf(" v%d, v%d, [obj+%04x]", pDecInsn->vA, pDecInsn->vB, pDecInsn->vC);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d, v%d, [obj+%04x]", pDecInsn->vA,
                     pDecInsn->vB, pDecInsn->vC);
-				// Modified Tool
-				tc_str_format(buff_str, " v%d, v%d, ??? // field@%04x", pDecInsn->vA,
-					pDecInsn->vB, pDecInsn->vC);
-				instructions << margin_str << buff_str << " ";
-				node_insns << buff_str;
-            }
-        } else {
-            printf(" v%d, v%d, %s // class@%04x",
-                pDecInsn->vA, pDecInsn->vB,
-                getClassDescriptor(pDexFile, pDecInsn->vC), pDecInsn->vC);
-			// Modified Tool
-			tc_str_format(buff_str, " v%d, v%d, %s // class@%04x",
-				pDecInsn->vA, pDecInsn->vB,
-				getClassDescriptor(pDexFile, pDecInsn->vC), pDecInsn->vC);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
-        }
-        break;
-    case kFmt22cs:       // [opt] op vA, vB, field offset CCCC
-        printf(" v%d, v%d, [obj+%04x]",
-            pDecInsn->vA, pDecInsn->vB, pDecInsn->vC);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, v%d, [obj+%04x]",
-			pDecInsn->vA, pDecInsn->vB, pDecInsn->vC);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
+      node_insns << buff_str;
+      break;
+    }
     case kFmt30t:
-        printf(" #%08x", pDecInsn->vA);
-		// Modified Tool
-		tc_str_format(buff_str, " #%08x", pDecInsn->vA);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt31i:        // op vAA, #+BBBBBBBB
-        {
-            /* this is often, but not always, a float */
-            union {
-                float f;
-                u4 i;
-            } conv;
-            conv.i = pDecInsn->vB;
-            printf(" v%d, #float %f // #%08x",
-                pDecInsn->vA, conv.f, pDecInsn->vB);
-			// Modified Tool
-			tc_str_format(buff_str, " v%d, #float %f // #%08x",
-				pDecInsn->vA, conv.f, pDecInsn->vB);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
+    {
+      printf(" #%08x", pDecInsn->vA);
+      // Modified Tool
+      tc_str_format(buff_str, " #%08x", pDecInsn->vA);
+      node_insns << buff_str;
+      break;
+    }
+    case kFmt31i: // op vAA, #+BBBBBBBB
+    {
+      /* this is often, but not always, a float */
+      union {
+        float f;
+        u4 i;
+      } conv;
+      conv.i = pDecInsn->vB;
+      printf(" v%d, #float %f // #%08x", pDecInsn->vA, conv.f, pDecInsn->vB);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d, #float %f // #%08x", pDecInsn->vA, conv.f,
+                    pDecInsn->vB);
+      node_insns << buff_str;
+      break;
+    }
+    case kFmt31c: // op vAA, thing@BBBBBBBB
+    {
+      printf(" v%d, \"%s\" // string@%08x", pDecInsn->vA,
+             dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d, \"%s\" // string@%08x", pDecInsn->vA,
+                    dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
+      node_insns << buff_str;
+      break;
+    }
+    case kFmt31t: // op vAA, offset +BBBBBBBB
+    {
+      printf(" v%d, %08x // +%08x", pDecInsn->vA, insnIdx + pDecInsn->vB,
+             pDecInsn->vB);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d, %08x // +%08x", pDecInsn->vA,
+                    insnIdx + pDecInsn->vB, pDecInsn->vB);
+      node_insns << buff_str;
+      break;
+    }
+    case kFmt32x: // op vAAAA, vBBBB
+    {
+      printf(" v%d, v%d", pDecInsn->vA, pDecInsn->vB);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
+      node_insns << buff_str;
+      break;
+    }
+    case kFmt35c: // op vB, {vD, vE, vF, vG, vA}, thing@CCCC
+    {
+      /* NOTE: decoding of 35c doesn't quite match spec */
+      fputs(" {", stdout);
+      for (i = 0; i < (int)pDecInsn->vA; i++) {
+        if (i == 0) {
+          printf("v%d", pDecInsn->arg[i]);
+          // Modified Tool
+          tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
+          node_insns << " {" << buff_str;
+        } else {
+          printf(", v%d", pDecInsn->arg[i]);
+          // Modified Tool
+          tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
+          node_insns << " {" << buff_str;
         }
-        break;
-    case kFmt31c:        // op vAA, thing@BBBBBBBB
-        printf(" v%d, \"%s\" // string@%08x", pDecInsn->vA,
-            dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, \"%s\" // string@%08x", pDecInsn->vA,
-			dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
-		node_insns << buff_str;
-		instructions << margin_str << buff_str << " ";
-        break;
-    case kFmt31t:       // op vAA, offset +BBBBBBBB
-        printf(" v%d, %08x // +%08x",
-            pDecInsn->vA, insnIdx + pDecInsn->vB, pDecInsn->vB);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, %08x // +%08x",
-			pDecInsn->vA, insnIdx + pDecInsn->vB, pDecInsn->vB);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt32x:        // op vAAAA, vBBBB
-        printf(" v%d, v%d", pDecInsn->vA, pDecInsn->vB);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt35c:        // op vB, {vD, vE, vF, vG, vA}, thing@CCCC
-        {
-            /* NOTE: decoding of 35c doesn't quite match spec */
-            fputs(" {", stdout);
-            for (i = 0; i < (int) pDecInsn->vA; i++) {
-				if (i == 0)
-				{
-					printf("v%d", pDecInsn->arg[i]);
-					// Modified Tool
-					tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
-					instructions << " {" << buff_str;
-					node_insns << " {" << buff_str;
-				}                   
-				else
-				{
-					printf(", v%d", pDecInsn->arg[i]);
-					// Modified Tool
-					tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
-					instructions << " {" << buff_str;
-					node_insns << " {" << buff_str;
-				}
-                   
-            }
-            if (pDecInsn->opCode == OP_FILLED_NEW_ARRAY) {
-                printf("}, %s // class@%04x",
-                    getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
-				// Modified Tool
-				tc_str_format(buff_str, "}, %s // class@%04x",
-					getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
-				instructions << buff_str << " ";
-				node_insns << buff_str;
-            } else {
-                FieldMethodInfo methInfo;
-                if (getMethodInfo(pDexFile, pDecInsn->vB, &methInfo)) {
-                    printf("}, %s.%s:%s // method@%04x",
+      }
+      if (pDecInsn->opCode == OP_FILLED_NEW_ARRAY) {
+        printf("}, %s // class@%04x",
+               getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
+        // Modified Tool
+        tc_str_format(buff_str, "}, %s // class@%04x",
+                      getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
+        node_insns << buff_str;
+      } else {
+        FieldMethodInfo methInfo;
+        if (getMethodInfo(pDexFile, pDecInsn->vB, &methInfo)) {
+          printf("}, %s.%s:%s // method@%04x", methInfo.classDescriptor,
+                 methInfo.name, methInfo.signature, pDecInsn->vB);
+          // Modified Tool
+          tc_str_format(buff_str, "}, %s.%s:%s // method@%04x",
                         methInfo.classDescriptor, methInfo.name,
                         methInfo.signature, pDecInsn->vB);
-					// Modified Tool
-					tc_str_format(buff_str, "}, %s.%s:%s // method@%04x",
-						methInfo.classDescriptor, methInfo.name,
-						methInfo.signature, pDecInsn->vB);
-					instructions << buff_str << " ";
-					node_insns << buff_str;
-                } else {
-                    printf("}, ??? // method@%04x", pDecInsn->vB);
-					// Modified Tool
-					tc_str_format(buff_str, "}, ??? // method@%04x", pDecInsn->vB);
-					instructions << buff_str << " ";
-					node_insns << buff_str;
-                }
-            }
+          node_insns << buff_str;
+        } else {
+          printf("}, ??? // method@%04x", pDecInsn->vB);
+          // Modified Tool
+          tc_str_format(buff_str, "}, ??? // method@%04x", pDecInsn->vB);
+          node_insns << buff_str;
         }
-        break;
+      }
+      break;
+    }
     case kFmt35ms:       // [opt] invoke-virtual+super
     case kFmt35fs:       // [opt] invoke-interface
-        {
-            fputs(" {", stdout);
-            for (i = 0; i < (int) pDecInsn->vA; i++) {
-				if (i == 0)
-				{
-					printf("v%d", pDecInsn->arg[i]);
-					// Modified Tool
-					tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
-					instructions <<  " {" << buff_str;
-					node_insns << " {" << buff_str;
-				}                   
-				else
-				{
-					printf(", v%d", pDecInsn->arg[i]);
-					// Modified Tool
-					tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
-					instructions << " {" << buff_str;
-					node_insns << " {" << buff_str;
-				}       
-            }
-            printf("}, [%04x] // vtable #%04x", pDecInsn->vB, pDecInsn->vB);
-			// Modified Tool
-			tc_str_format(buff_str, "}, [%04x] // vtable #%04x", pDecInsn->vB, pDecInsn->vB);
-			instructions << buff_str << " ";
-			node_insns << buff_str;
+    {
+      fputs(" {", stdout);
+      for (i = 0; i < (int)pDecInsn->vA; i++) {
+        if (i == 0) {
+          printf("v%d", pDecInsn->arg[i]);
+          // Modified Tool
+          tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
+          node_insns << " {" << buff_str;
+        } else {
+          printf(", v%d", pDecInsn->arg[i]);
+          // Modified Tool
+          tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
+          node_insns << " {" << buff_str;
         }
-        break;
-    case kFmt3rc:        // op {vCCCC .. v(CCCC+AA-1)}, meth@BBBB
-        {
-            /*
-             * This doesn't match the "dx" output when some of the args are
-             * 64-bit values -- dx only shows the first register.
-             */
-            fputs(" {", stdout);
-            for (i = 0; i < (int) pDecInsn->vA; i++) {
-				if (i == 0)
-				{
-					printf("v%d", pDecInsn->vC + i);
-					// Modified Tool
-					tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
-					instructions << " {" << buff_str;
-					node_insns << buff_str;
-				}
-				else
-				{
-					printf(", v%d", pDecInsn->vC + i);
-					// Modified Tool
-					tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
-					instructions << " {" << buff_str;
-					node_insns << buff_str;
-				}       
-            }
-            if (pDecInsn->opCode == OP_FILLED_NEW_ARRAY_RANGE) {
-                printf("}, %s // class@%04x",
-                    getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
-				// Modified Tool
-				tc_str_format(buff_str, "}, %s // class@%04x",
-					getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
-				instructions << buff_str << " ";
-				node_insns << buff_str;
-            } else {
-                FieldMethodInfo methInfo;
-                if (getMethodInfo(pDexFile, pDecInsn->vB, &methInfo)) {
-                    printf("}, %s.%s:%s // method@%04x",
+      }
+      printf("}, [%04x] // vtable #%04x", pDecInsn->vB, pDecInsn->vB);
+      // Modified Tool
+      tc_str_format(buff_str, "}, [%04x] // vtable #%04x", pDecInsn->vB,
+                    pDecInsn->vB);
+      node_insns << buff_str;
+    } break;
+    case kFmt3rc: // op {vCCCC .. v(CCCC+AA-1)}, meth@BBBB
+    {
+      /*
+       * This doesn't match the "dx" output when some of the args are
+       * 64-bit values -- dx only shows the first register.
+       */
+      fputs(" {", stdout);
+      for (i = 0; i < (int)pDecInsn->vA; i++) {
+        if (i == 0) {
+          printf("v%d", pDecInsn->vC + i);
+          // Modified Tool
+          tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
+          node_insns << buff_str;
+        } else {
+          printf(", v%d", pDecInsn->vC + i);
+          // Modified Tool
+          tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
+          node_insns << buff_str;
+        }
+      }
+      if (pDecInsn->opCode == OP_FILLED_NEW_ARRAY_RANGE) {
+        printf("}, %s // class@%04x",
+               getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
+        // Modified Tool
+        tc_str_format(buff_str, "}, %s // class@%04x",
+                      getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
+        node_insns << buff_str;
+      } else {
+        FieldMethodInfo methInfo;
+        if (getMethodInfo(pDexFile, pDecInsn->vB, &methInfo)) {
+          printf("}, %s.%s:%s // method@%04x", methInfo.classDescriptor,
+                 methInfo.name, methInfo.signature, pDecInsn->vB);
+          // Modified Tool
+          tc_str_format(buff_str, "}, %s.%s:%s // method@%04x",
                         methInfo.classDescriptor, methInfo.name,
                         methInfo.signature, pDecInsn->vB);
-					// Modified Tool
-					tc_str_format(buff_str, "}, %s.%s:%s // method@%04x",
-						methInfo.classDescriptor, methInfo.name,
-						methInfo.signature, pDecInsn->vB);
-					instructions << buff_str << " ";
-					node_insns << buff_str;
-                } else {
-                    printf("}, ??? // method@%04x", pDecInsn->vB);
-					// Modified Tool
-					tc_str_format(buff_str, "}, ??? // method@%04x", pDecInsn->vB);
-					instructions << buff_str << " ";
-					node_insns << buff_str;
-                }
-            }
+          node_insns << buff_str;
+        } else {
+          printf("}, ??? // method@%04x", pDecInsn->vB);
+          // Modified Tool
+          tc_str_format(buff_str, "}, ??? // method@%04x", pDecInsn->vB);
+          node_insns << buff_str;
         }
-        break;
+      }
+      break;
+    } 
     case kFmt3rms:       // [opt] invoke-virtual+super/range
     case kFmt3rfs:       // [opt] invoke-interface/range
-        {
-            /*
-             * This doesn't match the "dx" output when some of the args are
-             * 64-bit values -- dx only shows the first register.
-             */
-            fputs(" {", stdout);
-            for (i = 0; i < (int) pDecInsn->vA; i++) {
-				if (i == 0)
-				{
-					printf("v%d", pDecInsn->vC + i);
-					// Modified Tool
-					tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
-					instructions << " {" << buff_str;
-					node_insns << " {" << buff_str;
-				} 
-				else
-				{
-					printf(", v%d", pDecInsn->vC + i);
-					// Modified Tool
-					tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
-					instructions << " {" << buff_str;
-					node_insns << " {" << buff_str;
-				}      
-            }
-            printf("}, [%04x] // vtable #%04x", pDecInsn->vB, pDecInsn->vB);
-			// Modified Tool
-			tc_str_format(buff_str, "}, [%04x] // vtable #%04x", pDecInsn->vB, pDecInsn->vB);
-			instructions << buff_str << " ";
-			node_insns << buff_str;
+    {
+      /*
+       * This doesn't match the "dx" output when some of the args are
+       * 64-bit values -- dx only shows the first register.
+       */
+      fputs(" {", stdout);
+      for (i = 0; i < (int)pDecInsn->vA; i++) {
+        if (i == 0) {
+          printf("v%d", pDecInsn->vC + i);
+          // Modified Tool
+          tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
+          node_insns << " {" << buff_str;
+        } else {
+          printf(", v%d", pDecInsn->vC + i);
+          // Modified Tool
+          tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
+          node_insns << " {" << buff_str;
         }
-        break;
-    case kFmt3rinline:   // [opt] execute-inline/range
-        {
-            fputs(" {", stdout);
-            for (i = 0; i < (int) pDecInsn->vA; i++) {
-				if (i == 0)
-				{
-					printf("v%d", pDecInsn->vC + i);
-					// Modified Tool
-					tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
-					instructions << " {" << buff_str;
-					node_insns << " {" << buff_str;
-				}                   
-				else
-				{
-					printf(", v%d", pDecInsn->vC + i);
-					// Modified Tool
-					tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
-					instructions << " {" << buff_str;
-					node_insns << " {" << buff_str;
-				}    
-            }
-            printf("}, [%04x] // inline #%04x", pDecInsn->vB, pDecInsn->vB);
-			// Modified Tool
-			tc_str_format(buff_str, "}, [%04x] // inline #%04x", pDecInsn->vB, pDecInsn->vB);
-			instructions << buff_str << " ";
-			node_insns << buff_str;
+      }
+      printf("}, [%04x] // vtable #%04x", pDecInsn->vB, pDecInsn->vB);
+      // Modified Tool
+      tc_str_format(buff_str, "}, [%04x] // vtable #%04x", pDecInsn->vB,
+                    pDecInsn->vB);
+      node_insns << buff_str;
+      break;
+    } 
+    case kFmt3rinline: // [opt] execute-inline/range
+    {
+      fputs(" {", stdout);
+      for (i = 0; i < (int)pDecInsn->vA; i++) {
+        if (i == 0) {
+          printf("v%d", pDecInsn->vC + i);
+          // Modified Tool
+          tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
+          node_insns << " {" << buff_str;
+        } else {
+          printf(", v%d", pDecInsn->vC + i);
+          // Modified Tool
+          tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
+          node_insns << " {" << buff_str;
         }
-        break;
-    case kFmt3inline:    // [opt] inline invoke
-        {
-            fputs(" {", stdout);
-            for (i = 0; i < (int) pDecInsn->vA; i++) {
-				if (i == 0)
-				{
-					printf("v%d", pDecInsn->arg[i]);
-					// Modified Tool
-					tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
-					instructions << " {" << buff_str;
-					node_insns << " {" << buff_str;
-				}
-				else
-				{
-					printf(", v%d", pDecInsn->arg[i]);
-					// Modified Tool
-					tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
-					instructions << " {" << buff_str;
-					node_insns << " {" << buff_str;
-				}
-            }
-			printf("}, [%04x] // inline #%04x", pDecInsn->vB, pDecInsn->vB);
-			// Modified Tool
-			tc_str_format(buff_str, "}, [%04x] // inline #%04x", pDecInsn->vB, pDecInsn->vB);
-			instructions << buff_str << " ";
-			node_insns << buff_str;
+      }
+      printf("}, [%04x] // inline #%04x", pDecInsn->vB, pDecInsn->vB);
+      // Modified Tool
+      tc_str_format(buff_str, "}, [%04x] // inline #%04x", pDecInsn->vB,
+                    pDecInsn->vB);
+      node_insns << buff_str;
+      break;
+    } 
+    case kFmt3inline: // [opt] inline invoke
+    {
+      fputs(" {", stdout);
+      for (i = 0; i < (int)pDecInsn->vA; i++) {
+        if (i == 0) {
+          printf("v%d", pDecInsn->arg[i]);
+          // Modified Tool
+          tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
+          node_insns << " {" << buff_str;
+        } else {
+          printf(", v%d", pDecInsn->arg[i]);
+          // Modified Tool
+          tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
+          node_insns << " {" << buff_str;
         }
-        break;
-    case kFmt51l:        // op vAA, #+BBBBBBBBBBBBBBBB
-        {
-            /* this is often, but not always, a double */
-            union {
-                double d;
-                u8 j;
-            } conv;
-            conv.j = pDecInsn->vB_wide;
-            printf(" v%d, #double %f // #%016llx",
-                pDecInsn->vA, conv.d, pDecInsn->vB_wide);
-			// Modified Tool
-			tc_str_format(buff_str, " v%d, #double %f // #%016llx",
-				pDecInsn->vA, conv.d, pDecInsn->vB_wide);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
-        }
-        break;
+      }
+      printf("}, [%04x] // inline #%04x", pDecInsn->vB, pDecInsn->vB);
+      // Modified Tool
+      tc_str_format(buff_str, "}, [%04x] // inline #%04x", pDecInsn->vB,
+                    pDecInsn->vB);
+      node_insns << buff_str;
+      break;
+    } 
+    case kFmt51l: // op vAA, #+BBBBBBBBBBBBBBBB
+    {
+      /* this is often, but not always, a double */
+      union {
+        double d;
+        u8 j;
+      } conv;
+      conv.j = pDecInsn->vB_wide;
+      printf(" v%d, #double %f // #%016llx", pDecInsn->vA, conv.d,
+             pDecInsn->vB_wide);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d, #double %f // #%016llx", pDecInsn->vA,
+                    conv.d, pDecInsn->vB_wide);
+      node_insns << buff_str;
+      break;
+    } 
     case kFmtUnknown:
         break;
-    default:
-        printf(" ???");
-		// Modified Tool
-		tc_str_format(buff_str, " ???");
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
+    default: 
+    {
+      printf(" ???");
+      // Modified Tool
+      tc_str_format(buff_str, " ???");
+      node_insns << buff_str;
+      break;
     }
-
+    }
 
     putchar('\n');
 
-	auto const instructions_str = instructions.str();
-	TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename, instructions_str);
+    // Construct Tree Node
+    auto method_node =
+        TreeConstructor::Node(((u1 *)insns - pDexFile->baseAddr) + insnIdx * 2,
+                              pDecInsn->opCode, node_insns.str());
 
-	// Construct Tree Node
-	auto method_node = TreeConstructor::Node(((u1*)insns - pDexFile->baseAddr) + insnIdx * 2,
-										   	 pDecInsn->opCode,
-											 node_insns.str());
-
-	return method_node;
+    return method_node;
 }
 
 /*
@@ -1231,15 +1167,6 @@ void dumpBytecodes(DexFile* pDexFile, const DexMethod* pDexMethod)
 
     getMethodInfo(pDexFile, pDexMethod->methodIdx, &methInfo);
     startAddr = ((u1*)pCode - pDexFile->baseAddr);
-
-	// Modified Tool
-	std::string startAddrStr;
-	{
-		std::stringstream stream;
-		stream << std::hex << startAddr;
-		startAddrStr = stream.str();
-	}
-	TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename, std::string(4, ' ') + "|" + startAddrStr + "|");
 
     className = descriptorToDot(methInfo.classDescriptor);
 
@@ -1284,10 +1211,9 @@ void dumpBytecodes(DexFile* pDexFile, const DexMethod* pDexMethod)
         insns += insnWidth;
         insnIdx += insnWidth;
     }
-	method_tree.pretty_print();
 	method_tree.dot_fmt_dump();
 
-    free(className);
+  free(className);
 }
 
 /*
@@ -1304,14 +1230,6 @@ void dumpCode(DexFile* pDexFile, const DexMethod* pDexMethod)
 
     if (gOptions.disassemble)
         dumpBytecodes(pDexFile, pDexMethod);
-/* NOCOMMIT
-    dumpCatches(pDexFile, pCode);
-*/
-    /* both of these are encoded in debug info */
-/* NOCOMMIT
-    dumpPositions(pDexFile, pCode, pDexMethod);
-    dumpLocals(pDexFile, pCode, pDexMethod);
-*/
 }
 
 /*
@@ -1344,121 +1262,110 @@ void dumpMethod(DexFile* pDexFile, const DexMethod* pDexMethod, int i, std::stri
         printf("    #%d              : (in %s)\n", i, backDescriptor);
         printf("      name          : '%s'\n", name);
 
-		// Modified Tool
-		TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename, std::string(4, ' ') + std::string(name));
+    if (pDexMethod->codeOff == 0) {
+        printf("      code          : (none)\n");
+    } else {
+        printf("      code          -\n");
+        dumpCode(pDexFile, pDexMethod);
+    }
 
-        // NOCOMMIT printf("      type          : '%s'\n", typeDescriptor);
-        // NOCOMMIT printf("      access        : 0x%04x (%s)\n",
-        // NOCOMMIT     pDexMethod->accessFlags, accessStr);
-
-        if (pDexMethod->codeOff == 0) {
-            printf("      code          : (none)\n");
-        } else {
-            printf("      code          -\n");
-            dumpCode(pDexFile, pDexMethod);
-        }
-
-        if (gOptions.disassemble)
-            putchar('\n');
-
-		// Modified Tool
-		TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename, std::string(4, ' ') + std::string(20, '-'));
+    if (gOptions.disassemble) {
+      putchar('\n');
     } else if (gOptions.outputFormat == OUTPUT_XML) {
-        bool constructor = (name[0] == '<');
+      bool constructor = (name[0] == '<');
 
-        if (constructor) {
-            char* tmp;
+      if (constructor) {
+        char *tmp;
 
-            tmp = descriptorClassToDot(backDescriptor);
-            printf("<constructor name=\"%s\"\n", tmp);
-            free(tmp);
+        tmp = descriptorClassToDot(backDescriptor);
+        printf("<constructor name=\"%s\"\n", tmp);
+        free(tmp);
 
-            tmp = descriptorToDot(backDescriptor);
-            printf(" type=\"%s\"\n", tmp);
-            free(tmp);
+        tmp = descriptorToDot(backDescriptor);
+        printf(" type=\"%s\"\n", tmp);
+        free(tmp);
+      } else {
+        printf("<method name=\"%s\"\n", name);
+
+        const char *returnType = strrchr(typeDescriptor, ')');
+        if (returnType == NULL) {
+          fprintf(stderr, "bad method type descriptor '%s'\n", typeDescriptor);
+          goto bail;
+        }
+
+        char *tmp = descriptorToDot(returnType + 1);
+        printf(" return=\"%s\"\n", tmp);
+        free(tmp);
+
+        printf(" abstract=%s\n",
+               quotedBool((pDexMethod->accessFlags & ACC_ABSTRACT) != 0));
+        printf(" native=%s\n",
+               quotedBool((pDexMethod->accessFlags & ACC_NATIVE) != 0));
+
+        bool isSync =
+            (pDexMethod->accessFlags & ACC_SYNCHRONIZED) != 0 ||
+            (pDexMethod->accessFlags & ACC_DECLARED_SYNCHRONIZED) != 0;
+        printf(" synchronized=%s\n", quotedBool(isSync));
+      }
+
+      printf(" static=%s\n",
+             quotedBool((pDexMethod->accessFlags & ACC_STATIC) != 0));
+      printf(" final=%s\n",
+             quotedBool((pDexMethod->accessFlags & ACC_FINAL) != 0));
+      // "deprecated=" not knowable w/o parsing annotations
+      // NOCOMMIT printf(" visibility=%s\n",
+      // NOCOMMIT    quotedVisibility(pDexMethod->accessFlags));
+
+      printf(">\n");
+
+      /*
+       * Parameters.
+       */
+      if (typeDescriptor[0] != '(') {
+        fprintf(stderr, "ERROR: bad descriptor '%s'\n", typeDescriptor);
+        goto bail;
+      }
+
+      char *tmpBuf =
+          (char *)malloc(strlen(typeDescriptor) + 1); /* more than big enough */
+      int argNum = 0;
+
+      const char *base = typeDescriptor + 1;
+
+      while (*base != ')') {
+        char *cp = tmpBuf;
+
+        while (*base == '[')
+          *cp++ = *base++;
+
+        if (*base == 'L') {
+          /* copy through ';' */
+          do {
+            *cp = *base++;
+          } while (*cp++ != ';');
         } else {
-            printf("<method name=\"%s\"\n", name);
-
-            const char* returnType = strrchr(typeDescriptor, ')');
-            if (returnType == NULL) {
-                fprintf(stderr, "bad method type descriptor '%s'\n",
-                    typeDescriptor);
-                goto bail;
-            }
-
-            char* tmp = descriptorToDot(returnType+1);
-            printf(" return=\"%s\"\n", tmp);
-            free(tmp);
-
-            printf(" abstract=%s\n",
-                quotedBool((pDexMethod->accessFlags & ACC_ABSTRACT) != 0));
-            printf(" native=%s\n",
-                quotedBool((pDexMethod->accessFlags & ACC_NATIVE) != 0));
-
-            bool isSync =
-                (pDexMethod->accessFlags & ACC_SYNCHRONIZED) != 0 ||
-                (pDexMethod->accessFlags & ACC_DECLARED_SYNCHRONIZED) != 0;
-            printf(" synchronized=%s\n", quotedBool(isSync));
-        }
-
-        printf(" static=%s\n",
-            quotedBool((pDexMethod->accessFlags & ACC_STATIC) != 0));
-        printf(" final=%s\n",
-            quotedBool((pDexMethod->accessFlags & ACC_FINAL) != 0));
-        // "deprecated=" not knowable w/o parsing annotations
-        // NOCOMMIT printf(" visibility=%s\n",
-        // NOCOMMIT    quotedVisibility(pDexMethod->accessFlags));
-
-        printf(">\n");
-
-        /*
-         * Parameters.
-         */
-        if (typeDescriptor[0] != '(') {
-            fprintf(stderr, "ERROR: bad descriptor '%s'\n", typeDescriptor);
+          /* primitive char, copy it */
+          if (strchr("ZBCSIFJD", *base) == NULL) {
+            fprintf(stderr, "ERROR: bad method signature '%s'\n", base);
             goto bail;
+          }
+          *cp++ = *base++;
         }
 
-        char* tmpBuf = (char*)malloc(strlen(typeDescriptor)+1);      /* more than big enough */
-        int argNum = 0;
+        /* null terminate and display */
+        *cp++ = '\0';
 
-        const char* base = typeDescriptor+1;
+        char *tmp = descriptorToDot(tmpBuf);
+        printf("<parameter name=\"arg%d\" type=\"%s\">\n</parameter>\n",
+               argNum++, tmp);
+        free(tmp);
+        free(tmpBuf);
+      }
 
-        while (*base != ')') {
-            char* cp = tmpBuf;
-
-            while (*base == '[')
-                *cp++ = *base++;
-
-            if (*base == 'L') {
-                /* copy through ';' */
-                do {
-                    *cp = *base++;
-                } while (*cp++ != ';');
-            } else {
-                /* primitive char, copy it */
-                if (strchr("ZBCSIFJD", *base) == NULL) {
-                    fprintf(stderr, "ERROR: bad method signature '%s'\n", base);
-                    goto bail;
-                }
-                *cp++ = *base++;
-            }
-
-            /* null terminate and display */
-            *cp++ = '\0';
-
-            char* tmp = descriptorToDot(tmpBuf);
-            printf("<parameter name=\"arg%d\" type=\"%s\">\n</parameter>\n",
-                argNum++, tmp);
-            free(tmp);
-			free(tmpBuf);
-        }
-
-        if (constructor)
-            printf("</constructor>\n");
-        else
-            printf("</method>\n");
-
+      if (constructor)
+        printf("</constructor>\n");
+      else
+        printf("</method>\n");
     }
 
 bail:
@@ -1573,11 +1480,6 @@ void dumpClass(DexFile* pDexFile, int idx, char** pLastPackage)
     
     classDescriptor = dexStringByTypeIdx(pDexFile, pClassDef->classIdx);
 
-	// Modified Tool
-	auto class_name = std::string(classDescriptor);
-	class_name.pop_back();
-	TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename, class_name);
-
     /*
      * For the XML output, show the package name.  Ideally we'd gather
      * up the classes, sort them, and dump them alphabetically so the
@@ -1635,13 +1537,6 @@ void dumpClass(DexFile* pDexFile, int idx, char** pLastPackage)
     if (gOptions.outputFormat == OUTPUT_PLAIN) {
         printf("Class #%d            -\n", idx);
         printf("  Class descriptor  : '%s'\n", classDescriptor);
-        // NOCOMMIT printf("  Access flags      : 0x%04x (%s)\n",
-        // NOCOMMIT    pClassDef->accessFlags, accessStr);
-
-        // NOCOMMIT if (superclassDescriptor != NULL)
-        // NOCOMMIT     printf("  Superclass        : '%s'\n", superclassDescriptor);
-
-        // NOCOMMIT printf("  Interfaces        -\n");
     } else {
         char* tmp;
 
@@ -1668,24 +1563,6 @@ void dumpClass(DexFile* pDexFile, int idx, char** pLastPackage)
         printf(">\n");
     }
     pInterfaces = dexGetInterfacesList(pDexFile, pClassDef);
-/* NOCOMMIT
-    if (pInterfaces != NULL) {
-        for (i = 0; i < (int) pInterfaces->size; i++)
-            dumpInterface(pDexFile, dexGetTypeItem(pInterfaces, i), i);
-    }
-
-    if (gOptions.outputFormat == OUTPUT_PLAIN)
-        printf("  Static fields     -\n");
-    for (i = 0; i < (int) pClassData->header.staticFieldsSize; i++) {
-        dumpSField(pDexFile, &pClassData->staticFields[i], i);
-    }
-
-    if (gOptions.outputFormat == OUTPUT_PLAIN)
-        printf("  Instance fields   -\n");
-    for (i = 0; i < (int) pClassData->header.instanceFieldsSize; i++) {
-        dumpIField(pDexFile, &pClassData->instanceFields[i], i);
-    }
-*/
     if (gOptions.outputFormat == OUTPUT_PLAIN)
         printf("  Direct methods    -\n");
     for (i = 0; i < (int) pClassData->header.directMethodsSize; i++) {
@@ -1714,9 +1591,6 @@ void dumpClass(DexFile* pDexFile, int idx, char** pLastPackage)
     if (gOptions.outputFormat == OUTPUT_XML) {
         printf("</class>\n");
     }
-
-	TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename, std::string(80, '='));
-
 }
 
 
