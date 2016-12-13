@@ -115,6 +115,7 @@
     <ClCompile Include="..\libdex\SysUtil.cpp" />
     <ClCompile Include="..\libdex\ZipArchive.cpp" />
     <ClCompile Include="..\msvc\getopt.c" />
+    <ClCompile Include="..\TreeConstructor\TCNode.cpp" />
     <ClCompile Include="DexDump.cpp" />
     <ClCompile Include="OpCodeNames.c" />
   </ItemGroup>
@@ -134,6 +135,7 @@
     <ClInclude Include="..\libdex\SysUtil.h" />
     <ClInclude Include="..\libdex\ZipArchive.h" />
     <ClInclude Include="..\msvc\getopt.h" />
+    <ClInclude Include="..\TreeConstructor\TCNode.h" />
     <ClInclude Include="OpCodeNames.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

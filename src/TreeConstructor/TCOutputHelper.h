@@ -14,6 +14,7 @@ namespace TreeConstructor
 namespace Helper
 {
 auto constexpr classlist_filename = "class_list.txt";
+auto constexpr graph_filename = "graph.dot";
 
 void write(std::basic_string<char> const& filename,
 		   std::basic_string<char> const& msg);

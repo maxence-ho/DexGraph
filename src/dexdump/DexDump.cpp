@@ -48,10 +48,12 @@
 #include <assert.h>
 #include <string>
 #include <windows.h>
+#include <memory>
 
 // Modified Tool
 #include <sstream>
 #include <TreeConstructor/TCOutputHelper.h>
+#include <TreeConstructor/TCNode.h>
 
 static const char* gProgName = "dexdump";
 
@@ -595,14 +597,18 @@ const char* getClassDescriptor(DexFile* pDexFile, u4 classIdx)
 /*
  * Dump a single instruction.
  */
-void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
-    int insnWidth, const DecodedInstruction* pDecInsn)
+TreeConstructor::Node dumpInstruction(DexFile* pDexFile, 
+	const DexCode* pCode,
+	int insnIdx,
+    int insnWidth,
+	const DecodedInstruction* pDecInsn)
 {
 	// Modified Tool
 	auto const margin_str = std::string(4, ' ');
 	std::string buff_str;
 
 	std::stringstream instructions;
+	std::stringstream node_insns;
 
     const u2* insns = pCode->insns;
     int i;
@@ -634,34 +640,39 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
             printf("|%04x: packed-switch-data (%d units)",
                 insnIdx, insnWidth);
 			// Modified Tool
-			tc_str_format(buff_str, "|%04x: packed-switch-data (%d units)",
+			tc_str_format(buff_str, "%04x: packed-switch-data (%d units)",
 				insnIdx, insnWidth);
-			instructions << margin_str << buff_str << " ";
+			instructions << margin_str << "|" << buff_str << " ";
+			node_insns << buff_str;
         } else if (instr == kSparseSwitchSignature) {
             printf("|%04x: sparse-switch-data (%d units)",
                 insnIdx, insnWidth);
 			// Modified Tool
-			tc_str_format(buff_str, "|%04x: sparse-switch-data (%d units)",
+			tc_str_format(buff_str, "%04x: sparse-switch-data (%d units)",
 				insnIdx, insnWidth);
-			instructions << margin_str << buff_str << " ";
+			instructions << margin_str << "|" << buff_str << " ";
+			node_insns << buff_str;
         } else if (instr == kArrayDataSignature) {
             printf("|%04x: array-data (%d units)",
                 insnIdx, insnWidth);
 			// Modified Tool
-			tc_str_format(buff_str, "|%04x: array-data (%d units)",
+			tc_str_format(buff_str, "%04x: array-data (%d units)",
 				insnIdx, insnWidth);
-			instructions << margin_str << buff_str << " ";
+			instructions << margin_str << "|" << buff_str << " ";
+			node_insns << buff_str;
         } else {
             printf("|%04x: nop // spacer", insnIdx);
 			// Modified Tool
-			tc_str_format(buff_str, "|%04x: nop // spacer", insnIdx);
-			instructions << margin_str << buff_str << " ";
+			tc_str_format(buff_str, "%04x: nop // spacer", insnIdx);
+			instructions << margin_str << "|" << buff_str << " ";
+			node_insns << buff_str;
         }
     } else {
         printf("|%04x: %s", insnIdx, getOpcodeName(pDecInsn->opCode));
 		// Modified Tool
-		tc_str_format(buff_str, "|%04x: %s", insnIdx, getOpcodeName(pDecInsn->opCode));
-		instructions << margin_str << buff_str << " ";
+		tc_str_format(buff_str, "%04x: %s", insnIdx, getOpcodeName(pDecInsn->opCode));
+		instructions << margin_str << "|" << buff_str << " ";
+		node_insns << buff_str;
     }
 
     switch (dexGetInstrFormat(gInstrFormat, pDecInsn->opCode)) {
@@ -672,6 +683,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 		// Modified Tool
 		tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
 		instructions << margin_str << buff_str << " ";
+		node_insns << buff_str;
         break;
     case kFmt11n:        // op vA, #+B
         printf(" v%d, #int %d // #%x",
@@ -680,12 +692,14 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 		tc_str_format(buff_str, " v%d, #int %d // #%x",
 			pDecInsn->vA, (s4)pDecInsn->vB, (u1)pDecInsn->vB);
 		instructions << margin_str << buff_str << " ";
+		node_insns << buff_str;
         break;
     case kFmt11x:        // op vAA
         printf(" v%d", pDecInsn->vA);
 		// Modified Tool
 		tc_str_format(buff_str, " v%d", pDecInsn->vA);
 		instructions << margin_str << buff_str << " ";
+		node_insns << buff_str;
         break;
     case kFmt10t:        // op +AA
     case kFmt20t:        // op +AAAA
@@ -701,6 +715,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 				(targ < 0) ? '-' : '+',
 				(targ < 0) ? -targ : targ);
 			instructions << margin_str << buff_str << " ";
+			node_insns << buff_str;
         }
         break;
     case kFmt22x:        // op vAA, vBBBB
@@ -708,6 +723,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 		// Modified Tool
 		tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
 		instructions << margin_str << buff_str << " ";
+		node_insns << buff_str;
         break;
     case kFmt21t:        // op vAA, +BBBB
         {
@@ -722,6 +738,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 				(targ < 0) ? '-' : '+',
 				(targ < 0) ? -targ : targ);
 			instructions << margin_str << buff_str << " ";
+			node_insns << buff_str;
         }
         break;
     case kFmt21s:        // op vAA, #+BBBB
@@ -731,6 +748,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 		tc_str_format(buff_str, " v%d, #int %d // #%x",
 			pDecInsn->vA, (s4)pDecInsn->vB, (u2)pDecInsn->vB);
 		instructions << margin_str << buff_str << " ";
+		node_insns << buff_str;
         break;
     case kFmt21h:        // op vAA, #+BBBB0000[00000000]
         // The printed format varies a bit based on the actual opcode.
@@ -742,6 +760,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 			tc_str_format(buff_str, " v%d, #int %d // #%x",
 				pDecInsn->vA, value, (u2)pDecInsn->vB);
 			instructions << margin_str << buff_str << " ";
+			node_insns << buff_str;
         } else {
             s8 value = ((s8) pDecInsn->vB) << 48;
             printf(" v%d, #long %lld // #%x",
@@ -750,6 +769,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 			tc_str_format(buff_str, " v%d, #long %lld // #%x",
 				pDecInsn->vA, value, (u2)pDecInsn->vB);
 			instructions << margin_str << buff_str << " ";
+			node_insns << buff_str;
         }
         break;
     case kFmt21c:        // op vAA, thing@BBBB
@@ -760,6 +780,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 			tc_str_format(buff_str, " v%d, \"%s\" // string@%04x", pDecInsn->vA,
 				dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
 			instructions << margin_str << buff_str << " ";
+			node_insns << buff_str;
         } else if (pDecInsn->opCode == OP_CHECK_CAST ||
                    pDecInsn->opCode == OP_NEW_INSTANCE ||
                    pDecInsn->opCode == OP_CONST_CLASS)
@@ -770,6 +791,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 			tc_str_format(buff_str, " v%d, %s // class@%04x", pDecInsn->vA,
 				getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
 			instructions << margin_str << buff_str << " ";
+			node_insns << buff_str;
         } else /* OP_SGET* */ {
             FieldMethodInfo fieldInfo;
             if (getFieldInfo(pDexFile, pDecInsn->vB, &fieldInfo)) {
@@ -781,11 +803,13 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 					fieldInfo.classDescriptor, fieldInfo.name,
 					fieldInfo.signature, pDecInsn->vB);
 				instructions << margin_str << buff_str << " ";
+				node_insns << buff_str;
             } else {
                 printf(" v%d, ??? // field@%04x", pDecInsn->vA, pDecInsn->vB);
 				// Modified Tool
 				tc_str_format(buff_str, " v%d, ??? // field@%04x", pDecInsn->vA, pDecInsn->vB);
 				instructions << margin_str << buff_str << " ";
+				node_insns << buff_str;
             }
         }
         break;
@@ -794,6 +818,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 		// Modified Tool
 		tc_str_format(buff_str, " v%d, v%d, v%d", pDecInsn->vA, pDecInsn->vB, pDecInsn->vC);
 		instructions << margin_str << buff_str << " ";
+		node_insns << buff_str;
         break;
     case kFmt22b:        // op vAA, vBB, #+CC
         printf(" v%d, v%d, #int %d // #%02x",
@@ -802,6 +827,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 		tc_str_format(buff_str, " v%d, v%d, #int %d // #%02x",
 			pDecInsn->vA, pDecInsn->vB, (s4)pDecInsn->vC, (u1)pDecInsn->vC);
 		instructions << margin_str << buff_str << " ";
+		node_insns << buff_str;
         break;
     case kFmt22t:        // op vA, vB, +CCCC
         {
@@ -816,6 +842,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 				(targ < 0) ? '-' : '+',
 				(targ < 0) ? -targ : targ);
 			instructions << margin_str << buff_str << " ";
+			node_insns << buff_str;
         }
         break;
     case kFmt22s:        // op vA, vB, #+CCCC
@@ -825,6 +852,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 		tc_str_format(buff_str, " v%d, v%d, #int %d // #%04x",
 			pDecInsn->vA, pDecInsn->vB, (s4)pDecInsn->vC, (u2)pDecInsn->vC);
 		instructions << margin_str << buff_str << " ";
+		node_insns << buff_str;
         break;
     case kFmt22c:        // op vA, vB, thing@CCCC
         if (pDecInsn->opCode >= OP_IGET && pDecInsn->opCode <= OP_IPUT_SHORT) {
@@ -838,6 +866,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 					pDecInsn->vB, fieldInfo.classDescriptor, fieldInfo.name,
 					fieldInfo.signature, pDecInsn->vC);
 				instructions << margin_str << buff_str << " ";
+				node_insns << buff_str;
             } else {
                 printf(" v%d, v%d, ??? // field@%04x", pDecInsn->vA,
                     pDecInsn->vB, pDecInsn->vC);
@@ -845,6 +874,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 				tc_str_format(buff_str, " v%d, v%d, ??? // field@%04x", pDecInsn->vA,
 					pDecInsn->vB, pDecInsn->vC);
 				instructions << margin_str << buff_str << " ";
+				node_insns << buff_str;
             }
         } else {
             printf(" v%d, v%d, %s // class@%04x",
@@ -855,6 +885,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 				pDecInsn->vA, pDecInsn->vB,
 				getClassDescriptor(pDexFile, pDecInsn->vC), pDecInsn->vC);
 			instructions << margin_str << buff_str << " ";
+			node_insns << buff_str;
         }
         break;
     case kFmt22cs:       // [opt] op vA, vB, field offset CCCC
@@ -864,12 +895,14 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 		tc_str_format(buff_str, " v%d, v%d, [obj+%04x]",
 			pDecInsn->vA, pDecInsn->vB, pDecInsn->vC);
 		instructions << margin_str << buff_str << " ";
+		node_insns << buff_str;
         break;
     case kFmt30t:
         printf(" #%08x", pDecInsn->vA);
 		// Modified Tool
 		tc_str_format(buff_str, " #%08x", pDecInsn->vA);
 		instructions << margin_str << buff_str << " ";
+		node_insns << buff_str;
         break;
     case kFmt31i:        // op vAA, #+BBBBBBBB
         {
@@ -885,6 +918,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 			tc_str_format(buff_str, " v%d, #float %f // #%08x",
 				pDecInsn->vA, conv.f, pDecInsn->vB);
 			instructions << margin_str << buff_str << " ";
+			node_insns << buff_str;
         }
         break;
     case kFmt31c:        // op vAA, thing@BBBBBBBB
@@ -893,6 +927,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 		// Modified Tool
 		tc_str_format(buff_str, " v%d, \"%s\" // string@%08x", pDecInsn->vA,
 			dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
+		node_insns << buff_str;
 		instructions << margin_str << buff_str << " ";
         break;
     case kFmt31t:       // op vAA, offset +BBBBBBBB
@@ -902,12 +937,14 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 		tc_str_format(buff_str, " v%d, %08x // +%08x",
 			pDecInsn->vA, insnIdx + pDecInsn->vB, pDecInsn->vB);
 		instructions << margin_str << buff_str << " ";
+		node_insns << buff_str;
         break;
     case kFmt32x:        // op vAAAA, vBBBB
         printf(" v%d, v%d", pDecInsn->vA, pDecInsn->vB);
 		// Modified Tool
 		tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
 		instructions << margin_str << buff_str << " ";
+		node_insns << buff_str;
         break;
     case kFmt35c:        // op vB, {vD, vE, vF, vG, vA}, thing@CCCC
         {
@@ -920,6 +957,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 					// Modified Tool
 					tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
 					instructions << " {" << buff_str;
+					node_insns << " {" << buff_str;
 				}                   
 				else
 				{
@@ -927,6 +965,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 					// Modified Tool
 					tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
 					instructions << " {" << buff_str;
+					node_insns << " {" << buff_str;
 				}
                    
             }
@@ -937,6 +976,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 				tc_str_format(buff_str, "}, %s // class@%04x",
 					getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
 				instructions << buff_str << " ";
+				node_insns << buff_str;
             } else {
                 FieldMethodInfo methInfo;
                 if (getMethodInfo(pDexFile, pDecInsn->vB, &methInfo)) {
@@ -948,11 +988,13 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 						methInfo.classDescriptor, methInfo.name,
 						methInfo.signature, pDecInsn->vB);
 					instructions << buff_str << " ";
+					node_insns << buff_str;
                 } else {
                     printf("}, ??? // method@%04x", pDecInsn->vB);
 					// Modified Tool
 					tc_str_format(buff_str, "}, ??? // method@%04x", pDecInsn->vB);
 					instructions << buff_str << " ";
+					node_insns << buff_str;
                 }
             }
         }
@@ -968,6 +1010,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 					// Modified Tool
 					tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
 					instructions <<  " {" << buff_str;
+					node_insns << " {" << buff_str;
 				}                   
 				else
 				{
@@ -975,12 +1018,14 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 					// Modified Tool
 					tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
 					instructions << " {" << buff_str;
+					node_insns << " {" << buff_str;
 				}       
             }
             printf("}, [%04x] // vtable #%04x", pDecInsn->vB, pDecInsn->vB);
 			// Modified Tool
 			tc_str_format(buff_str, "}, [%04x] // vtable #%04x", pDecInsn->vB, pDecInsn->vB);
 			instructions << buff_str << " ";
+			node_insns << buff_str;
         }
         break;
     case kFmt3rc:        // op {vCCCC .. v(CCCC+AA-1)}, meth@BBBB
@@ -997,6 +1042,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 					// Modified Tool
 					tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
 					instructions << " {" << buff_str;
+					node_insns << buff_str;
 				}
 				else
 				{
@@ -1004,6 +1050,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 					// Modified Tool
 					tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
 					instructions << " {" << buff_str;
+					node_insns << buff_str;
 				}       
             }
             if (pDecInsn->opCode == OP_FILLED_NEW_ARRAY_RANGE) {
@@ -1013,6 +1060,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 				tc_str_format(buff_str, "}, %s // class@%04x",
 					getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
 				instructions << buff_str << " ";
+				node_insns << buff_str;
             } else {
                 FieldMethodInfo methInfo;
                 if (getMethodInfo(pDexFile, pDecInsn->vB, &methInfo)) {
@@ -1024,11 +1072,13 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 						methInfo.classDescriptor, methInfo.name,
 						methInfo.signature, pDecInsn->vB);
 					instructions << buff_str << " ";
+					node_insns << buff_str;
                 } else {
                     printf("}, ??? // method@%04x", pDecInsn->vB);
 					// Modified Tool
 					tc_str_format(buff_str, "}, ??? // method@%04x", pDecInsn->vB);
 					instructions << buff_str << " ";
+					node_insns << buff_str;
                 }
             }
         }
@@ -1048,6 +1098,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 					// Modified Tool
 					tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
 					instructions << " {" << buff_str;
+					node_insns << " {" << buff_str;
 				} 
 				else
 				{
@@ -1055,12 +1106,14 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 					// Modified Tool
 					tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
 					instructions << " {" << buff_str;
+					node_insns << " {" << buff_str;
 				}      
             }
             printf("}, [%04x] // vtable #%04x", pDecInsn->vB, pDecInsn->vB);
 			// Modified Tool
 			tc_str_format(buff_str, "}, [%04x] // vtable #%04x", pDecInsn->vB, pDecInsn->vB);
 			instructions << buff_str << " ";
+			node_insns << buff_str;
         }
         break;
     case kFmt3rinline:   // [opt] execute-inline/range
@@ -1073,6 +1126,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 					// Modified Tool
 					tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
 					instructions << " {" << buff_str;
+					node_insns << " {" << buff_str;
 				}                   
 				else
 				{
@@ -1080,12 +1134,14 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 					// Modified Tool
 					tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
 					instructions << " {" << buff_str;
+					node_insns << " {" << buff_str;
 				}    
             }
             printf("}, [%04x] // inline #%04x", pDecInsn->vB, pDecInsn->vB);
 			// Modified Tool
 			tc_str_format(buff_str, "}, [%04x] // inline #%04x", pDecInsn->vB, pDecInsn->vB);
 			instructions << buff_str << " ";
+			node_insns << buff_str;
         }
         break;
     case kFmt3inline:    // [opt] inline invoke
@@ -1098,6 +1154,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 					// Modified Tool
 					tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
 					instructions << " {" << buff_str;
+					node_insns << " {" << buff_str;
 				}
 				else
 				{
@@ -1105,12 +1162,14 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 					// Modified Tool
 					tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
 					instructions << " {" << buff_str;
+					node_insns << " {" << buff_str;
 				}
             }
 			printf("}, [%04x] // inline #%04x", pDecInsn->vB, pDecInsn->vB);
 			// Modified Tool
 			tc_str_format(buff_str, "}, [%04x] // inline #%04x", pDecInsn->vB, pDecInsn->vB);
 			instructions << buff_str << " ";
+			node_insns << buff_str;
         }
         break;
     case kFmt51l:        // op vAA, #+BBBBBBBBBBBBBBBB
@@ -1127,6 +1186,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 			tc_str_format(buff_str, " v%d, #double %f // #%016llx",
 				pDecInsn->vA, conv.d, pDecInsn->vB_wide);
 			instructions << margin_str << buff_str << " ";
+			node_insns << buff_str;
         }
         break;
     case kFmtUnknown:
@@ -1136,6 +1196,7 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 		// Modified Tool
 		tc_str_format(buff_str, " ???");
 		instructions << margin_str << buff_str << " ";
+		node_insns << buff_str;
         break;
     }
 
@@ -1145,6 +1206,12 @@ void dumpInstruction(DexFile* pDexFile, const DexCode* pCode, int insnIdx,
 	auto const instructions_str = instructions.str();
 	TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename, instructions_str);
 
+	// Construct Tree Node
+	auto method_node = TreeConstructor::Node(((u1*)insns - pDexFile->baseAddr) + insnIdx * 2,
+										   	 pDecInsn->opCode,
+											 node_insns.str());
+
+	return method_node;
 }
 
 /*
@@ -1181,6 +1248,7 @@ void dumpBytecodes(DexFile* pDexFile, const DexMethod* pDexMethod)
         className, methInfo.name, methInfo.signature);
 
     insnIdx = 0;
+	TreeConstructor::Node method_tree;
     while (insnIdx < (int) pCode->insnsSize) {
         int insnWidth;
         OpCode opCode;
@@ -1209,11 +1277,15 @@ void dumpBytecodes(DexFile* pDexFile, const DexMethod* pDexMethod)
         }
 
         dexDecodeInstruction(gInstrFormat, insns, &decInsn);
-        dumpInstruction(pDexFile, pCode, insnIdx, insnWidth, &decInsn);
+        auto instr_node = dumpInstruction(pDexFile, pCode, insnIdx, insnWidth, &decInsn);
+
+		TreeConstructor::append_node_to(method_tree,instr_node);
 
         insns += insnWidth;
         insnIdx += insnWidth;
     }
+	method_tree.pretty_print();
+	method_tree.dot_fmt_dump();
 
     free(className);
 }
@@ -1229,7 +1301,6 @@ void dumpCode(DexFile* pDexFile, const DexMethod* pDexMethod)
     printf("      ins           : %d\n", pCode->insSize);
     printf("      outs          : %d\n", pCode->outsSize);
     printf("      insns size    : %d 16-bit code units\n", pCode->insnsSize);
-
 
     if (gOptions.disassemble)
         dumpBytecodes(pDexFile, pDexMethod);
