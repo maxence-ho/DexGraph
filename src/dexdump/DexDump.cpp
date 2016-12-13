@@ -1500,188 +1500,191 @@ void dumpIField(const DexFile* pDexFile, const DexField* pIField, int i)
  * If "*pLastPackage" is NULL or does not match the current class' package,
  * the value will be replaced with a newly-allocated string.
  */
-void dumpClass(DexFile* pDexFile, int idx, char** pLastPackage)
-{
-    const DexTypeList* pInterfaces;
-    const DexClassDef* pClassDef;
-    DexClassData* pClassData = NULL;
-    const u1* pEncodedData;
-    const char* fileName;
-    const char* classDescriptor;
-    const char* superclassDescriptor;
-    char* accessStr = NULL;
-    int i;
+void dumpClass(DexFile *pDexFile, int idx, char **pLastPackage) {
+  const DexTypeList *pInterfaces;
+  const DexClassDef *pClassDef;
+  DexClassData *pClassData = NULL;
+  const u1 *pEncodedData;
+  const char *fileName;
+  const char *classDescriptor;
+  const char *superclassDescriptor;
+  char *accessStr = NULL;
+  int i;
 
-    pClassDef = dexGetClassDef(pDexFile, idx);
+  pClassDef = dexGetClassDef(pDexFile, idx);
 
-    if (gOptions.exportsOnly && (pClassDef->accessFlags & ACC_PUBLIC) == 0) {
-        //printf("<!-- omitting non-public class %s -->\n",
-        //    classDescriptor);
-        free(pClassData);
-        free(accessStr);
-        return;
-    }
+  if (gOptions.exportsOnly && (pClassDef->accessFlags & ACC_PUBLIC) == 0) {
+    // printf("<!-- omitting non-public class %s -->\n",
+    //    classDescriptor);
+    free(pClassData);
+    free(accessStr);
+    return;
+  }
 
-    pEncodedData = dexGetClassData(pDexFile, pClassDef);
-    pClassData = dexReadAndVerifyClassData(&pEncodedData, NULL);
+  pEncodedData = dexGetClassData(pDexFile, pClassDef);
+  pClassData = dexReadAndVerifyClassData(&pEncodedData, NULL);
 
-    if (pClassData == NULL) {
-        printf("Trouble reading class data (#%d)\n", idx);
-        free(pClassData);
-        free(accessStr);
-        return;
-    }
+  if (pClassData == NULL) {
+    printf("Trouble reading class data (#%d)\n", idx);
+    free(pClassData);
+    free(accessStr);
+    return;
+  }
 
-    classDescriptor = dexStringByTypeIdx(pDexFile, pClassDef->classIdx);
+  classDescriptor = dexStringByTypeIdx(pDexFile, pClassDef->classIdx);
 
-    // Modified Tool
-    auto class_name = std::string(classDescriptor);
-    class_name.pop_back();
-    TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename, class_name);
+  // Modified Tool
+  auto class_name = std::string(classDescriptor);
+  class_name.pop_back();
+  TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename,
+                                 class_name);
 
-    /*
-     * For the XML output, show the package name.  Ideally we'd gather
-     * up the classes, sort them, and dump them alphabetically so the
-     * package name wouldn't jump around, but that's not a great plan
-     * for something that needs to run on the device.
-     */
-    if (!(classDescriptor[0] == 'L' && classDescriptor[strlen(classDescriptor) - 1] == ';')) {
-        /* arrays and primitives should not be defined explicitly */
-        fprintf(stderr, "Malformed class name '%s'\n", classDescriptor);
-        /* keep going? */
-    } else if (gOptions.outputFormat == OUTPUT_XML) {
-        char* mangle;
-        char* lastSlash;
-        char* cp;
+  /*
+   * For the XML output, show the package name.  Ideally we'd gather
+   * up the classes, sort them, and dump them alphabetically so the
+   * package name wouldn't jump around, but that's not a great plan
+   * for something that needs to run on the device.
+   */
+  if (!(classDescriptor[0] == 'L' &&
+        classDescriptor[strlen(classDescriptor) - 1] == ';')) {
+    /* arrays and primitives should not be defined explicitly */
+    fprintf(stderr, "Malformed class name '%s'\n", classDescriptor);
+    /* keep going? */
+  } else if (gOptions.outputFormat == OUTPUT_XML) {
+    char *mangle;
+    char *lastSlash;
+    char *cp;
 
-        mangle = strdup(classDescriptor + 1);
-        mangle[strlen(mangle) - 1] = '\0';
+    mangle = strdup(classDescriptor + 1);
+    mangle[strlen(mangle) - 1] = '\0';
 
-        /* reduce to just the package name */
-        lastSlash = strrchr(mangle, '/');
-        if (lastSlash != NULL) {
-            *lastSlash = '\0';
-        } else {
-            *mangle = '\0';
-        }
-
-        for (cp = mangle; *cp != '\0'; cp++) {
-            if (*cp == '/')
-                *cp = '.';
-        }
-
-        if (*pLastPackage == NULL || strcmp(mangle, *pLastPackage) != 0) {
-            /* start of a new package */
-            if (*pLastPackage != NULL)
-                printf("</package>\n");
-            printf("<package name=\"%s\"\n>\n", mangle);
-            free(*pLastPackage);
-            *pLastPackage = mangle;
-        } else {
-            free(mangle);
-        }
-    }
-
-    accessStr = createAccessFlagStr(pClassDef->accessFlags, kAccessForClass);
-
-    if (pClassDef->superclassIdx == kDexNoIndex) {
-        superclassDescriptor = NULL;
+    /* reduce to just the package name */
+    lastSlash = strrchr(mangle, '/');
+    if (lastSlash != NULL) {
+      *lastSlash = '\0';
     } else {
-        superclassDescriptor = dexStringByTypeIdx(pDexFile, pClassDef->superclassIdx);
+      *mangle = '\0';
     }
 
-    if (gOptions.outputFormat == OUTPUT_PLAIN) {
-        printf("Class #%d            -\n", idx);
-        printf("  Class descriptor  : '%s'\n", classDescriptor);
-        // NOCOMMIT printf("  Access flags      : 0x%04x (%s)\n",
-        // NOCOMMIT    pClassDef->accessFlags, accessStr);
+    for (cp = mangle; *cp != '\0'; cp++) {
+      if (*cp == '/')
+        *cp = '.';
+    }
 
-        // NOCOMMIT if (superclassDescriptor != NULL)
-        // NOCOMMIT     printf("  Superclass        : '%s'\n", superclassDescriptor);
-
-        // NOCOMMIT printf("  Interfaces        -\n");
+    if (*pLastPackage == NULL || strcmp(mangle, *pLastPackage) != 0) {
+      /* start of a new package */
+      if (*pLastPackage != NULL)
+        printf("</package>\n");
+      printf("<package name=\"%s\"\n>\n", mangle);
+      free(*pLastPackage);
+      *pLastPackage = mangle;
     } else {
-        char* tmp;
-
-        tmp = descriptorClassToDot(classDescriptor);
-        printf("<class name=\"%s\"\n", tmp);
-        free(tmp);
-        /* NOCOMMIT
-        if (superclassDescriptor != NULL) {
-            tmp = descriptorToDot(superclassDescriptor);
-            printf(" extends=\"%s\"\n", tmp);
-            free(tmp);
-        }
-
-        printf(" abstract=%s\n",
-            quotedBool((pClassDef->accessFlags & ACC_ABSTRACT) != 0));
-        printf(" static=%s\n",
-            quotedBool((pClassDef->accessFlags & ACC_STATIC) != 0));
-        printf(" final=%s\n",
-            quotedBool((pClassDef->accessFlags & ACC_FINAL) != 0));
-        // "deprecated=" not knowable w/o parsing annotations
-        printf(" visibility=%s\n",
-            quotedVisibility(pClassDef->accessFlags));
-*/
-        printf(">\n");
+      free(mangle);
     }
-    pInterfaces = dexGetInterfacesList(pDexFile, pClassDef);
+  }
+
+  accessStr = createAccessFlagStr(pClassDef->accessFlags, kAccessForClass);
+
+  if (pClassDef->superclassIdx == kDexNoIndex) {
+    superclassDescriptor = NULL;
+  } else {
+    superclassDescriptor =
+        dexStringByTypeIdx(pDexFile, pClassDef->superclassIdx);
+  }
+
+  if (gOptions.outputFormat == OUTPUT_PLAIN) {
+    printf("Class #%d            -\n", idx);
+    printf("  Class descriptor  : '%s'\n", classDescriptor);
+    // NOCOMMIT printf("  Access flags      : 0x%04x (%s)\n",
+    // NOCOMMIT    pClassDef->accessFlags, accessStr);
+
+    // NOCOMMIT if (superclassDescriptor != NULL)
+    // NOCOMMIT     printf("  Superclass        : '%s'\n",
+    // superclassDescriptor);
+
+    // NOCOMMIT printf("  Interfaces        -\n");
+  } else {
+    char *tmp;
+
+    tmp = descriptorClassToDot(classDescriptor);
+    printf("<class name=\"%s\"\n", tmp);
+    free(tmp);
     /* NOCOMMIT
-    if (pInterfaces != NULL) {
-        for (i = 0; i < (int) pInterfaces->size; i++)
-            dumpInterface(pDexFile, dexGetTypeItem(pInterfaces, i), i);
+    if (superclassDescriptor != NULL) {
+        tmp = descriptorToDot(superclassDescriptor);
+        printf(" extends=\"%s\"\n", tmp);
+        free(tmp);
     }
 
-    if (gOptions.outputFormat == OUTPUT_PLAIN)
-        printf("  Static fields     -\n");
-    for (i = 0; i < (int) pClassData->header.staticFieldsSize; i++) {
-        dumpSField(pDexFile, &pClassData->staticFields[i], i);
-    }
-
-    if (gOptions.outputFormat == OUTPUT_PLAIN)
-        printf("  Instance fields   -\n");
-    for (i = 0; i < (int) pClassData->header.instanceFieldsSize; i++) {
-        dumpIField(pDexFile, &pClassData->instanceFields[i], i);
-    }
+    printf(" abstract=%s\n",
+        quotedBool((pClassDef->accessFlags & ACC_ABSTRACT) != 0));
+    printf(" static=%s\n",
+        quotedBool((pClassDef->accessFlags & ACC_STATIC) != 0));
+    printf(" final=%s\n",
+        quotedBool((pClassDef->accessFlags & ACC_FINAL) != 0));
+    // "deprecated=" not knowable w/o parsing annotations
+    printf(" visibility=%s\n",
+        quotedVisibility(pClassDef->accessFlags));
 */
-    if (gOptions.outputFormat == OUTPUT_PLAIN)
-        printf("  Direct methods    -\n");
-    for (i = 0; i < (int)pClassData->header.directMethodsSize; i++) {
-        dumpMethod(pDexFile, &pClassData->directMethods[i], i, class_name);
-    }
+    printf(">\n");
+  }
+  pInterfaces = dexGetInterfacesList(pDexFile, pClassDef);
+  /* NOCOMMIT
+  if (pInterfaces != NULL) {
+      for (i = 0; i < (int) pInterfaces->size; i++)
+          dumpInterface(pDexFile, dexGetTypeItem(pInterfaces, i), i);
+  }
 
-    if (gOptions.outputFormat == OUTPUT_PLAIN)
-        printf("  Virtual methods   -\n");
-    for (i = 0; i < (int)pClassData->header.virtualMethodsSize; i++) {
-        dumpMethod(pDexFile, &pClassData->virtualMethods[i], i, class_name);
-    }
+  if (gOptions.outputFormat == OUTPUT_PLAIN)
+      printf("  Static fields     -\n");
+  for (i = 0; i < (int) pClassData->header.staticFieldsSize; i++) {
+      dumpSField(pDexFile, &pClassData->staticFields[i], i);
+  }
 
-    // TODO: Annotations.
+  if (gOptions.outputFormat == OUTPUT_PLAIN)
+      printf("  Instance fields   -\n");
+  for (i = 0; i < (int) pClassData->header.instanceFieldsSize; i++) {
+      dumpIField(pDexFile, &pClassData->instanceFields[i], i);
+  }
+*/
+  if (gOptions.outputFormat == OUTPUT_PLAIN)
+    printf("  Direct methods    -\n");
+  for (i = 0; i < (int)pClassData->header.directMethodsSize; i++) {
+    dumpMethod(pDexFile, &pClassData->directMethods[i], i, class_name);
+  }
 
-    if (pClassDef->sourceFileIdx != kDexNoIndex)
-        fileName = dexStringById(pDexFile, pClassDef->sourceFileIdx);
-    else
-        fileName = "unknown";
+  if (gOptions.outputFormat == OUTPUT_PLAIN)
+    printf("  Virtual methods   -\n");
+  for (i = 0; i < (int)pClassData->header.virtualMethodsSize; i++) {
+    dumpMethod(pDexFile, &pClassData->virtualMethods[i], i, class_name);
+  }
 
-    if (gOptions.outputFormat == OUTPUT_PLAIN) {
-        printf("  source_file_idx   : %d (%s)\n",
-            pClassDef->sourceFileIdx, fileName);
-        printf("\n");
-    }
+  // TODO: Annotations.
 
-    if (gOptions.outputFormat == OUTPUT_XML) {
-        printf("</class>\n");
-    }
+  if (pClassDef->sourceFileIdx != kDexNoIndex)
+    fileName = dexStringById(pDexFile, pClassDef->sourceFileIdx);
+  else
+    fileName = "unknown";
 
-    TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename, std::string(80, '='));
+  if (gOptions.outputFormat == OUTPUT_PLAIN) {
+    printf("  source_file_idx   : %d (%s)\n", pClassDef->sourceFileIdx,
+           fileName);
+    printf("\n");
+  }
+
+  if (gOptions.outputFormat == OUTPUT_XML) {
+    printf("</class>\n");
+  }
+
+  TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename,
+                                 std::string(80, '='));
 }
 
 /*
  * Advance "ptr" to ensure 32-bit alignment.
  */
-static inline const u1* align32(const u1* ptr)
-{
-    return (u1*)(((int)ptr + 3) & ~0x03);
+static inline const u1 *align32(const u1 *ptr) {
+  return (u1 *)(((int)ptr + 3) & ~0x03);
 }
 
 /*
@@ -1877,42 +1880,41 @@ void dumpRegisterMaps(DexFile* pDexFile)
 /*
  * Dump the requested sections of the file.
  */
-void processDexFile(const char* fileName, DexFile* pDexFile)
-{
-    char* package = NULL;
-    int i;
+void processDexFile(const char *fileName, DexFile *pDexFile) {
+  char *package = NULL;
+  int i;
 
-    if (gOptions.verbose) {
-        printf("Opened '%s', DEX version '%.3s'\n", fileName,
-            pDexFile->pHeader->magic + 4);
-    }
+  if (gOptions.verbose) {
+    printf("Opened '%s', DEX version '%.3s'\n", fileName,
+           pDexFile->pHeader->magic + 4);
+  }
 
-    if (gOptions.dumpRegisterMaps) {
-        dumpRegisterMaps(pDexFile);
-        return;
-    }
+  if (gOptions.dumpRegisterMaps) {
+    dumpRegisterMaps(pDexFile);
+    return;
+  }
 
-    if (gOptions.showFileHeaders)
-        dumpFileHeader(pDexFile);
+  if (gOptions.showFileHeaders)
+    dumpFileHeader(pDexFile);
 
-    if (gOptions.outputFormat == OUTPUT_XML)
-        printf("<api>\n");
+  if (gOptions.outputFormat == OUTPUT_XML)
+    printf("<api>\n");
 
-    for (i = 0; i < (int)pDexFile->pHeader->classDefsSize; i++) {
-        if (gOptions.showSectionHeaders)
-            dumpClassDef(pDexFile, i);
+  for (i = 0; i < (int)pDexFile->pHeader->classDefsSize; i++) {
+    if (gOptions.showSectionHeaders)
+      dumpClassDef(pDexFile, i);
 
-        dumpClass(pDexFile, i, &package);
-    }
+    dumpClass(pDexFile, i, &package);
+  }
 
-    /* free the last one allocated */
-    if (package != NULL) {
-        printf("</package>\n");
-        free(package);
-    }
+  /* free the last one allocated */
+  if (package != NULL) {
+    printf("</package>\n");
+    free(package);
+  }
 
-    if (gOptions.outputFormat == OUTPUT_XML)
-        printf("</api>\n");
+  if (gOptions.outputFormat == OUTPUT_XML)
+    printf("</api>\n");
 }
 
 /*
