@@ -1,0 +1,17 @@
+﻿  TCNode.cpp
+LINK : warning LNK4075: ignoring '/INCREMENTAL' due to '/LTCG' specification
+  Generating code
+  Finished generating code
+zlib.lib(zutil.obj) : warning LNK4049: locally defined symbol _malloc imported
+zlib.lib(zutil.obj) : warning LNK4049: locally defined symbol _free imported
+zlib.lib(adler32.obj) : warning LNK4099: PDB 'zlib.pdb' was not found with 'zlib.lib(adler32.obj)' or at 'C:\Users\Maxence\Documents\GitHub\DexGraph\src\dexdump\Release\zlib.pdb'; linking object as if no debug info
+zlib.lib(crc32.obj) : warning LNK4099: PDB 'zlib.pdb' was not found with 'zlib.lib(crc32.obj)' or at 'C:\Users\Maxence\Documents\GitHub\DexGraph\src\dexdump\Release\zlib.pdb'; linking object as if no debug info
+zlib.lib(inflate.obj) : warning LNK4099: PDB 'zlib.pdb' was not found with 'zlib.lib(inflate.obj)' or at 'C:\Users\Maxence\Documents\GitHub\DexGraph\src\dexdump\Release\zlib.pdb'; linking object as if no debug info
+zlib.lib(inftrees.obj) : warning LNK4099: PDB 'zlib.pdb' was not found with 'zlib.lib(inftrees.obj)' or at 'C:\Users\Maxence\Documents\GitHub\DexGraph\src\dexdump\Release\zlib.pdb'; linking object as if no debug info
+zlib.lib(inffast.obj) : warning LNK4099: PDB 'zlib.pdb' was not found with 'zlib.lib(inffast.obj)' or at 'C:\Users\Maxence\Documents\GitHub\DexGraph\src\dexdump\Release\zlib.pdb'; linking object as if no debug info
+zlib.lib(zutil.obj) : warning LNK4099: PDB 'zlib.pdb' was not found with 'zlib.lib(zutil.obj)' or at 'C:\Users\Maxence\Documents\GitHub\DexGraph\src\dexdump\Release\zlib.pdb'; linking object as if no debug info
+  1 of 691 functions ( 0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    1 functions had inline decision re-evaluated but remain unchanged
+  dexdump.vcxproj -> C:\Users\Maxence\Documents\GitHub\DexGraph\src\dexdump\Release\dexdump.exe
+  dexdump.vcxproj -> C:\Users\Maxence\Documents\GitHub\DexGraph\src\dexdump\Release\dexdump.pdb (Full PDB)

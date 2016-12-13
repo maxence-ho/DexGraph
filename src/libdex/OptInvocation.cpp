@@ -105,8 +105,6 @@ char* dexOptGenerateCacheFileName(const char* fileName, const char* subFileName)
     /* Tack on the file name for the actual cache file path.
      */
     strncat(nameBuf, absoluteFile, kBufLen);
-
-    LOGV("Cache file for '%s' '%s' is '%s'\n", fileName, subFileName, nameBuf);
     return strdup(nameBuf);
 }
 

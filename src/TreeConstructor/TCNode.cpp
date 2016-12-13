@@ -58,8 +58,9 @@ void Node::dot_fmt_dump() const
 		}
 		current_node = next_node;
 	}
-	dot_str << "}";
-	Helper::write(Helper::graph_filename, dot_str.str());
+	dot_str << "}\n";
+	printf("%s", dot_str.str().c_str());
+	//Helper::write(Helper::graph_filename, dot_str.str());
 }
 
 void Node::copy(Node const& node)

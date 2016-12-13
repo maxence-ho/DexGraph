@@ -385,7 +385,6 @@ int verifyfile(char *fname)
                 }
                 else
                 {
-                    printf("OK: %s\n", s);
                 }
             }
         }

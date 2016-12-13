@@ -2783,7 +2783,6 @@ int dexFixByteOrdering(u1* addr, int len)
     bool okay = true;
 
     memset(&state, 0, sizeof(state));
-    LOGV("+++ swapping and verifying\n");
 
     /*
      * Start by verifying the magic number.  The caller verified that "len"

@@ -141,7 +141,6 @@ UnzipToFileResult dexOpenAndMap(const char* fileName, const char* tempFileName,
         result = dexUnzipToFile(fileName, tempFileName, quiet);
         
         if (result == kUTFRSuccess) {
-            printf("+++ Good unzip to '%s'\n", tempFileName);
             fileName = tempFileName;
             removeTemp = true;
         } else if (result == kUTFRNotZip) {

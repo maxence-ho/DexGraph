@@ -452,12 +452,6 @@ DexClassLookup* dexCreateClassLookup(DexFile* pDexFile)
         totalProbes += numProbes;
     }
 
-    LOGV("Class lookup: classes=%d slots=%d (%d%% occ) alloc=%d"
-         " total=%d max=%d\n",
-        pDexFile->pHeader->classDefsSize, numEntries,
-        (100 * pDexFile->pHeader->classDefsSize) / numEntries,
-        allocSize, totalProbes, maxProbes);
-
     return pLookup;
 }
 
@@ -618,11 +612,9 @@ static bool parseAuxData(const u1* data, DexFile* pDexFile)
 
     /* v1.0 format? */
     if (*pAux == 0) {
-        LOGV("+++ found OLD dex format\n");
         pDexFile->pClassLookup = (const DexClassLookup*) (pAux+1);
         return true;
     }
-    LOGV("+++ found NEW dex format\n");
 
     /* process chunks until we see the end marker */
     while (*pAux != kDexChunkEnd) {
@@ -650,7 +642,6 @@ static bool parseAuxData(const u1* data, DexFile* pDexFile)
             indexMapType = *pAux;
             break;
         case kDexChunkRegisterMaps:
-            LOGV("+++ found register maps, size=%u\n", size);
             pDexFile->pRegisterMapPool = data;
             break;
         default:
@@ -722,8 +713,6 @@ DexFile* dexFileParse(const u1* data, size_t length, int flags)
         }
 
         pDexFile->pOptHeader = (const DexOptHeader*) data;
-        LOGV("Good opt header, DEX offset is %d, flags=0x%02x\n",
-            pDexFile->pOptHeader->dexOffset, pDexFile->pOptHeader->flags);
 
         /* locate some auxillary data tables */
         if (!parseAuxData(data, pDexFile))
@@ -769,7 +758,6 @@ DexFile* dexFileParse(const u1* data, size_t length, int flags)
             if (!(flags & kDexParseContinueOnError))
                 goto bail;
         } else {
-            LOGV("+++ adler32 checksum (%08x) verified\n", adler);
         }
 
         const DexOptHeader* pOptHeader = pDexFile->pOptHeader;
@@ -781,7 +769,6 @@ DexFile* dexFileParse(const u1* data, size_t length, int flags)
                 if (!(flags & kDexParseContinueOnError))
                     goto bail;
             } else {
-                LOGV("+++ adler32 opt checksum (%08x) verified\n", adler);
             }
         }
     }
@@ -807,7 +794,6 @@ DexFile* dexFileParse(const u1* data, size_t length, int flags)
             if (!(flags & kDexParseContinueOnError))
                 goto bail;
         } else {
-            LOGV("+++ sha1 digest verified\n");
         }
     }
 
