@@ -29,98 +29,104 @@
  * - no generic signatures on parameters, e.g. type="java.lang.Class&lt;?&gt;"
  * - class shows declared fields and methods; does not show inherited fields
  */
-#include "libdex/DexFile.h"
+#include "libdex/CmdUtils.h"
 #include "libdex/DexCatch.h"
 #include "libdex/DexClass.h"
+#include "libdex/DexFile.h"
 #include "libdex/DexProto.h"
 #include "libdex/InstrUtils.h"
 #include "libdex/SysUtil.h"
-#include "libdex/CmdUtils.h"
 
 #include "dexdump/OpCodeNames.h"
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <fcntl.h>
-#include <string.h>
-#include <getopt.h>
-#include <errno.h>
 #include <assert.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <getopt.h>
+#include <memory>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <string>
 #include <windows.h>
-#include <memory>
 
 // Modified Tool
-#include <sstream>
-#include <TreeConstructor/TCOutputHelper.h>
 #include <TreeConstructor/TCNode.h>
+#include <TreeConstructor/TCOutputHelper.h>
+#include <sstream>
 
-static const char* gProgName = "dexdump";
+static const char *gProgName = "dexdump";
 
-static InstructionWidth* gInstrWidth;
-static InstructionFormat* gInstrFormat;
+static InstructionWidth *gInstrWidth;
+static InstructionFormat *gInstrFormat;
 
 typedef enum OutputFormat {
-    OUTPUT_PLAIN = 0,               /* default */
-    OUTPUT_XML,                     /* fancy */
+  OUTPUT_PLAIN = 0, /* default */
+  OUTPUT_XML,       /* fancy */
 } OutputFormat;
 
 /* command-line options */
 struct {
-    bool checksumOnly;
-    bool disassemble;
-    bool showFileHeaders;
-    bool showSectionHeaders;
-    bool ignoreBadChecksum;
-    bool dumpRegisterMaps;
-    OutputFormat outputFormat;
-    const char* tempFileName;
-    bool exportsOnly;
-    bool verbose;
+  bool checksumOnly;
+  bool disassemble;
+  bool showFileHeaders;
+  bool showSectionHeaders;
+  bool ignoreBadChecksum;
+  bool dumpRegisterMaps;
+  OutputFormat outputFormat;
+  const char *tempFileName;
+  bool exportsOnly;
+  bool verbose;
 } gOptions;
 
 /* basic info about a field or method */
 typedef struct FieldMethodInfo {
-    const char* classDescriptor;
-    const char* name;
-    const char* signature;
+  const char *classDescriptor;
+  const char *name;
+  const char *signature;
 } FieldMethodInfo;
 
 /*
- * Get 2 little-endian bytes. 
- */ 
-static inline u2 get2LE(unsigned char const* pSrc)
-{
-    return pSrc[0] | (pSrc[1] << 8);
-}   
+ * Get 2 little-endian bytes.
+ */
+static inline u2 get2LE(unsigned char const *pSrc) {
+  return pSrc[0] | (pSrc[1] << 8);
+}
 
 /*
- * Get 4 little-endian bytes. 
- */ 
-static inline u4 get4LE(unsigned char const* pSrc)
-{
-    return pSrc[0] | (pSrc[1] << 8) | (pSrc[2] << 16) | (pSrc[3] << 24);
-}   
+ * Get 4 little-endian bytes.
+ */
+static inline u4 get4LE(unsigned char const *pSrc) {
+  return pSrc[0] | (pSrc[1] << 8) | (pSrc[2] << 16) | (pSrc[3] << 24);
+}
 
 /*
  * Converts a single-character primitive type into its human-readable
  * equivalent.
  */
-static const char* primitiveTypeLabel(char typeChar)
-{
-    switch (typeChar) {
-    case 'B':   return "byte";
-    case 'C':   return "char";
-    case 'D':   return "double";
-    case 'F':   return "float";
-    case 'I':   return "int";
-    case 'J':   return "long";
-    case 'S':   return "short";
-    case 'V':   return "void";
-    case 'Z':   return "boolean";
-    default:
-                return "UNKNOWN";
-    }
+static const char *primitiveTypeLabel(char typeChar) {
+  switch (typeChar) {
+  case 'B':
+    return "byte";
+  case 'C':
+    return "char";
+  case 'D':
+    return "double";
+  case 'F':
+    return "float";
+  case 'I':
+    return "int";
+  case 'J':
+    return "long";
+  case 'S':
+    return "short";
+  case 'V':
+    return "void";
+  case 'Z':
+    return "boolean";
+  default:
+    return "UNKNOWN";
+  }
 }
 
 /*
@@ -129,53 +135,51 @@ static const char* primitiveTypeLabel(char typeChar)
  * "[I" becomes "int[]".  Also converts '$' to '.', which means this
  * form can't be converted back to a descriptor.
  */
-static char* descriptorToDot(const char* str)
-{
-    int targetLen = strlen(str);
-    int offset = 0;
-    int arrayDepth = 0;
-    char* newStr;
+static char *descriptorToDot(const char *str) {
+  int targetLen = strlen(str);
+  int offset = 0;
+  int arrayDepth = 0;
+  char *newStr;
 
-    /* strip leading [s; will be added to end */
-    while (targetLen > 1 && str[offset] == '[') {
-        offset++;
-        targetLen--;
+  /* strip leading [s; will be added to end */
+  while (targetLen > 1 && str[offset] == '[') {
+    offset++;
+    targetLen--;
+  }
+  arrayDepth = offset;
+
+  if (targetLen == 1) {
+    /* primitive type */
+    str = primitiveTypeLabel(str[offset]);
+    offset = 0;
+    targetLen = strlen(str);
+  } else {
+    /* account for leading 'L' and trailing ';' */
+    if (targetLen >= 2 && str[offset] == 'L' &&
+        str[offset + targetLen - 1] == ';') {
+      targetLen -= 2;
+      offset++;
     }
-    arrayDepth = offset;
+  }
 
-    if (targetLen == 1) {
-        /* primitive type */
-        str = primitiveTypeLabel(str[offset]);
-        offset = 0;
-        targetLen = strlen(str);
-    } else {
-        /* account for leading 'L' and trailing ';' */
-        if (targetLen >= 2 && str[offset] == 'L' &&
-            str[offset+targetLen-1] == ';')
-        {
-            targetLen -= 2;
-            offset++;
-        }
-    }
+  newStr = (char *)malloc(targetLen + arrayDepth * 2 + 1);
 
-    newStr = (char*)malloc(targetLen + arrayDepth * 2 +1);
+  /* copy class name over */
+  int i;
+  for (i = 0; i < targetLen; i++) {
+    char ch = str[offset + i];
+    newStr[i] = (ch == '/' || ch == '$') ? '.' : ch;
+  }
 
-    /* copy class name over */
-    int i;
-    for (i = 0; i < targetLen; i++) {
-        char ch = str[offset + i];
-        newStr[i] = (ch == '/' || ch == '$') ? '.' : ch;
-    }
+  /* add the appropriate number of brackets for arrays */
+  while (arrayDepth-- > 0) {
+    newStr[i++] = '[';
+    newStr[i++] = ']';
+  }
+  newStr[i] = '\0';
+  //    assert(i == targetLen + arrayDepth * 2);
 
-    /* add the appropriate number of brackets for arrays */
-    while (arrayDepth-- > 0) {
-        newStr[i++] = '[';
-        newStr[i++] = ']';
-    }
-    newStr[i] = '\0';
-//    assert(i == targetLen + arrayDepth * 2);
-
-    return newStr;
+  return newStr;
 }
 
 /*
@@ -184,72 +188,70 @@ static char* descriptorToDot(const char* str)
  *
  * Returns a newly-allocated string.
  */
-static char* descriptorClassToDot(const char* str)
-{
-    const char* lastSlash;
-    char* newStr;
-    char* cp;
+static char *descriptorClassToDot(const char *str) {
+  const char *lastSlash;
+  char *newStr;
+  char *cp;
 
-    /* reduce to just the class name, trimming trailing ';' */
-    lastSlash = strrchr(str, '/');
-    if (lastSlash == NULL)
-        lastSlash = str + 1;        /* start past 'L' */
-    else
-        lastSlash++;                /* start past '/' */
+  /* reduce to just the class name, trimming trailing ';' */
+  lastSlash = strrchr(str, '/');
+  if (lastSlash == NULL)
+    lastSlash = str + 1; /* start past 'L' */
+  else
+    lastSlash++; /* start past '/' */
 
-    newStr = strdup(lastSlash);
-    newStr[strlen(lastSlash)-1] = '\0';
-    for (cp = newStr; *cp != '\0'; cp++) {
-        if (*cp == '$')
-            *cp = '.';
-    }
+  newStr = strdup(lastSlash);
+  newStr[strlen(lastSlash) - 1] = '\0';
+  for (cp = newStr; *cp != '\0'; cp++) {
+    if (*cp == '$')
+      *cp = '.';
+  }
 
-    return newStr;
+  return newStr;
 }
 
 /*
  * Returns a quoted string representing the boolean value.
  */
-static const char* quotedBool(bool val)
-{
-    if (val)
-        return "\"true\"";
-    else
-        return "\"false\"";
+static const char *quotedBool(bool val) {
+  if (val)
+    return "\"true\"";
+  else
+    return "\"false\"";
 }
 
-static const char* quotedVisibility(u4 accessFlags)
-{
-    if ((accessFlags & ACC_PUBLIC) != 0)
-        return "\"public\"";
-    else if ((accessFlags & ACC_PROTECTED) != 0)
-        return "\"protected\"";
-    else if ((accessFlags & ACC_PRIVATE) != 0)
-        return "\"private\"";
-    else
-        return "\"package\"";
+static const char *quotedVisibility(u4 accessFlags) {
+  if ((accessFlags & ACC_PUBLIC) != 0)
+    return "\"public\"";
+  else if ((accessFlags & ACC_PROTECTED) != 0)
+    return "\"protected\"";
+  else if ((accessFlags & ACC_PRIVATE) != 0)
+    return "\"private\"";
+  else
+    return "\"package\"";
 }
 
 /*
  * Count the number of '1' bits in a word.
  */
-static int countOnes(u4 val)
-{
-    int count = 0;
+static int countOnes(u4 val) {
+  int count = 0;
 
-    val = val - ((val >> 1) & 0x55555555);
-    val = (val & 0x33333333) + ((val >> 2) & 0x33333333);
-    count = (((val + (val >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
+  val = val - ((val >> 1) & 0x55555555);
+  val = (val & 0x33333333) + ((val >> 2) & 0x33333333);
+  count = (((val + (val >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
 
-    return count;
+  return count;
 }
 
 /*
  * Flag for use with createAccessFlagStr().
  */
 typedef enum AccessFor {
-    kAccessForClass = 0, kAccessForMethod = 1, kAccessForField = 2,
-    kAccessForMAX
+  kAccessForClass = 0,
+  kAccessForMethod = 1,
+  kAccessForField = 2,
+  kAccessForMAX
 } AccessFor;
 
 /*
@@ -258,1277 +260,1206 @@ typedef enum AccessFor {
  * In the base language the access_flags fields are type u2; in Dalvik
  * they're u4.
  */
-static char* createAccessFlagStr(u4 flags, AccessFor forWhat)
-{
-#define NUM_FLAGS   18
-    static const char* kAccessStrings[kAccessForMAX][NUM_FLAGS] = {
-        {   
-            /* class, inner class */
-            "PUBLIC",           /* 0x0001 */
-            "PRIVATE",          /* 0x0002 */
-            "PROTECTED",        /* 0x0004 */
-            "STATIC",           /* 0x0008 */
-            "FINAL",            /* 0x0010 */
-            "?",                /* 0x0020 */
-            "?",                /* 0x0040 */
-            "?",                /* 0x0080 */
-            "?",                /* 0x0100 */
-            "INTERFACE",        /* 0x0200 */
-            "ABSTRACT",         /* 0x0400 */
-            "?",                /* 0x0800 */
-            "SYNTHETIC",        /* 0x1000 */
-            "ANNOTATION",       /* 0x2000 */
-            "ENUM",             /* 0x4000 */
-            "?",                /* 0x8000 */
-            "VERIFIED",         /* 0x10000 */
-            "OPTIMIZED",        /* 0x20000 */
-        },
-        {
-            /* method */
-            "PUBLIC",           /* 0x0001 */
-            "PRIVATE",          /* 0x0002 */
-            "PROTECTED",        /* 0x0004 */
-            "STATIC",           /* 0x0008 */
-            "FINAL",            /* 0x0010 */
-            "SYNCHRONIZED",     /* 0x0020 */
-            "BRIDGE",           /* 0x0040 */
-            "VARARGS",          /* 0x0080 */
-            "NATIVE",           /* 0x0100 */
-            "?",                /* 0x0200 */
-            "ABSTRACT",         /* 0x0400 */
-            "STRICT",           /* 0x0800 */
-            "SYNTHETIC",        /* 0x1000 */
-            "?",                /* 0x2000 */
-            "?",                /* 0x4000 */
-            "MIRANDA",          /* 0x8000 */
-            "CONSTRUCTOR",      /* 0x10000 */
-            "DECLARED_SYNCHRONIZED", /* 0x20000 */
-        },
-        {
-            /* field */
-            "PUBLIC",           /* 0x0001 */
-            "PRIVATE",          /* 0x0002 */
-            "PROTECTED",        /* 0x0004 */
-            "STATIC",           /* 0x0008 */
-            "FINAL",            /* 0x0010 */
-            "?",                /* 0x0020 */
-            "VOLATILE",         /* 0x0040 */
-            "TRANSIENT",        /* 0x0080 */
-            "?",                /* 0x0100 */
-            "?",                /* 0x0200 */
-            "?",                /* 0x0400 */
-            "?",                /* 0x0800 */
-            "SYNTHETIC",        /* 0x1000 */
-            "?",                /* 0x2000 */
-            "ENUM",             /* 0x4000 */
-            "?",                /* 0x8000 */
-            "?",                /* 0x10000 */
-            "?",                /* 0x20000 */
-        },
-    };
-    const int kLongest = 21;        /* strlen of longest string above */
-    int i, count;
-    char* str;
-    char* cp;
+static char *createAccessFlagStr(u4 flags, AccessFor forWhat) {
+#define NUM_FLAGS 18
+  static const char *kAccessStrings[kAccessForMAX][NUM_FLAGS] = {
+      {
+          /* class, inner class */
+          "PUBLIC",     /* 0x0001 */
+          "PRIVATE",    /* 0x0002 */
+          "PROTECTED",  /* 0x0004 */
+          "STATIC",     /* 0x0008 */
+          "FINAL",      /* 0x0010 */
+          "?",          /* 0x0020 */
+          "?",          /* 0x0040 */
+          "?",          /* 0x0080 */
+          "?",          /* 0x0100 */
+          "INTERFACE",  /* 0x0200 */
+          "ABSTRACT",   /* 0x0400 */
+          "?",          /* 0x0800 */
+          "SYNTHETIC",  /* 0x1000 */
+          "ANNOTATION", /* 0x2000 */
+          "ENUM",       /* 0x4000 */
+          "?",          /* 0x8000 */
+          "VERIFIED",   /* 0x10000 */
+          "OPTIMIZED",  /* 0x20000 */
+      },
+      {
+          /* method */
+          "PUBLIC",                /* 0x0001 */
+          "PRIVATE",               /* 0x0002 */
+          "PROTECTED",             /* 0x0004 */
+          "STATIC",                /* 0x0008 */
+          "FINAL",                 /* 0x0010 */
+          "SYNCHRONIZED",          /* 0x0020 */
+          "BRIDGE",                /* 0x0040 */
+          "VARARGS",               /* 0x0080 */
+          "NATIVE",                /* 0x0100 */
+          "?",                     /* 0x0200 */
+          "ABSTRACT",              /* 0x0400 */
+          "STRICT",                /* 0x0800 */
+          "SYNTHETIC",             /* 0x1000 */
+          "?",                     /* 0x2000 */
+          "?",                     /* 0x4000 */
+          "MIRANDA",               /* 0x8000 */
+          "CONSTRUCTOR",           /* 0x10000 */
+          "DECLARED_SYNCHRONIZED", /* 0x20000 */
+      },
+      {
+          /* field */
+          "PUBLIC",    /* 0x0001 */
+          "PRIVATE",   /* 0x0002 */
+          "PROTECTED", /* 0x0004 */
+          "STATIC",    /* 0x0008 */
+          "FINAL",     /* 0x0010 */
+          "?",         /* 0x0020 */
+          "VOLATILE",  /* 0x0040 */
+          "TRANSIENT", /* 0x0080 */
+          "?",         /* 0x0100 */
+          "?",         /* 0x0200 */
+          "?",         /* 0x0400 */
+          "?",         /* 0x0800 */
+          "SYNTHETIC", /* 0x1000 */
+          "?",         /* 0x2000 */
+          "ENUM",      /* 0x4000 */
+          "?",         /* 0x8000 */
+          "?",         /* 0x10000 */
+          "?",         /* 0x20000 */
+      },
+  };
+  const int kLongest = 21; /* strlen of longest string above */
+  int i, count;
+  char *str;
+  char *cp;
 
-    /*
-     * Allocate enough storage to hold the expected number of strings,
-     * plus a space between each.  We over-allocate, using the longest
-     * string above as the base metric.
-     */
-    count = countOnes(flags);
-    cp = str = (char*) malloc(count * (kLongest+1) +1);
+  /*
+   * Allocate enough storage to hold the expected number of strings,
+   * plus a space between each.  We over-allocate, using the longest
+   * string above as the base metric.
+   */
+  count = countOnes(flags);
+  cp = str = (char *)malloc(count * (kLongest + 1) + 1);
 
-    for (i = 0; i < NUM_FLAGS; i++) {
-        if (flags & 0x01) {
-            const char* accessStr = kAccessStrings[forWhat][i];
-            int len = strlen(accessStr);
-            if (cp != str)
-                *cp++ = ' ';
+  for (i = 0; i < NUM_FLAGS; i++) {
+    if (flags & 0x01) {
+      const char *accessStr = kAccessStrings[forWhat][i];
+      int len = strlen(accessStr);
+      if (cp != str)
+        *cp++ = ' ';
 
-            memcpy(cp, accessStr, len);
-            cp += len;
-        }
-        flags >>= 1;
+      memcpy(cp, accessStr, len);
+      cp += len;
     }
-    *cp = '\0';
+    flags >>= 1;
+  }
+  *cp = '\0';
 
-    return str;
+  return str;
 }
-
 
 /*
  * Dump the file header.
  */
-void dumpFileHeader(const DexFile* pDexFile)
-{
-    const DexHeader* pHeader = pDexFile->pHeader;
+void dumpFileHeader(const DexFile *pDexFile) {
+  const DexHeader *pHeader = pDexFile->pHeader;
 
-    printf("DEX file header:\n");
-    printf("magic               : '%.8s'\n", pHeader->magic);
-    printf("checksum            : %08x\n", pHeader->checksum);
-    printf("signature           : %02x%02x...%02x%02x\n",
-        pHeader->signature[0], pHeader->signature[1],
-        pHeader->signature[kSHA1DigestLen-2],
-        pHeader->signature[kSHA1DigestLen-1]);
-    printf("file_size           : %d\n", pHeader->fileSize);
-    printf("header_size         : %d\n", pHeader->headerSize);
-    printf("link_size           : %d\n", pHeader->linkSize);
-    printf("link_off            : %d (0x%06x)\n",
-        pHeader->linkOff, pHeader->linkOff);
-    printf("string_ids_size     : %d\n", pHeader->stringIdsSize);
-    printf("string_ids_off      : %d (0x%06x)\n",
-        pHeader->stringIdsOff, pHeader->stringIdsOff);
-    printf("type_ids_size       : %d\n", pHeader->typeIdsSize);
-    printf("type_ids_off        : %d (0x%06x)\n",
-        pHeader->typeIdsOff, pHeader->typeIdsOff);
-    printf("field_ids_size      : %d\n", pHeader->fieldIdsSize);
-    printf("field_ids_off       : %d (0x%06x)\n",
-        pHeader->fieldIdsOff, pHeader->fieldIdsOff);
-    printf("method_ids_size     : %d\n", pHeader->methodIdsSize);
-    printf("method_ids_off      : %d (0x%06x)\n",
-        pHeader->methodIdsOff, pHeader->methodIdsOff);
-    printf("class_defs_size     : %d\n", pHeader->classDefsSize);
-    printf("class_defs_off      : %d (0x%06x)\n",
-        pHeader->classDefsOff, pHeader->classDefsOff);
-    printf("data_size           : %d\n", pHeader->dataSize);
-    printf("data_off            : %d (0x%06x)\n",
-        pHeader->dataOff, pHeader->dataOff);
-    printf("\n");
+  printf("DEX file header:\n");
+  printf("magic               : '%.8s'\n", pHeader->magic);
+  printf("checksum            : %08x\n", pHeader->checksum);
+  printf("signature           : %02x%02x...%02x%02x\n", pHeader->signature[0],
+         pHeader->signature[1], pHeader->signature[kSHA1DigestLen - 2],
+         pHeader->signature[kSHA1DigestLen - 1]);
+  printf("file_size           : %d\n", pHeader->fileSize);
+  printf("header_size         : %d\n", pHeader->headerSize);
+  printf("link_size           : %d\n", pHeader->linkSize);
+  printf("link_off            : %d (0x%06x)\n", pHeader->linkOff,
+         pHeader->linkOff);
+  printf("string_ids_size     : %d\n", pHeader->stringIdsSize);
+  printf("string_ids_off      : %d (0x%06x)\n", pHeader->stringIdsOff,
+         pHeader->stringIdsOff);
+  printf("type_ids_size       : %d\n", pHeader->typeIdsSize);
+  printf("type_ids_off        : %d (0x%06x)\n", pHeader->typeIdsOff,
+         pHeader->typeIdsOff);
+  printf("field_ids_size      : %d\n", pHeader->fieldIdsSize);
+  printf("field_ids_off       : %d (0x%06x)\n", pHeader->fieldIdsOff,
+         pHeader->fieldIdsOff);
+  printf("method_ids_size     : %d\n", pHeader->methodIdsSize);
+  printf("method_ids_off      : %d (0x%06x)\n", pHeader->methodIdsOff,
+         pHeader->methodIdsOff);
+  printf("class_defs_size     : %d\n", pHeader->classDefsSize);
+  printf("class_defs_off      : %d (0x%06x)\n", pHeader->classDefsOff,
+         pHeader->classDefsOff);
+  printf("data_size           : %d\n", pHeader->dataSize);
+  printf("data_off            : %d (0x%06x)\n", pHeader->dataOff,
+         pHeader->dataOff);
+  printf("\n");
 }
 
 /*
  * Dump a class_def_item.
  */
-void dumpClassDef(DexFile* pDexFile, int idx)
-{
-    const DexClassDef* pClassDef;
-    const u1* pEncodedData;
-    DexClassData* pClassData;
+void dumpClassDef(DexFile *pDexFile, int idx) {
+  const DexClassDef *pClassDef;
+  const u1 *pEncodedData;
+  DexClassData *pClassData;
 
-    pClassDef = dexGetClassDef(pDexFile, idx);
-    pEncodedData = dexGetClassData(pDexFile, pClassDef);
-    pClassData = dexReadAndVerifyClassData(&pEncodedData, NULL);
+  pClassDef = dexGetClassDef(pDexFile, idx);
+  pEncodedData = dexGetClassData(pDexFile, pClassDef);
+  pClassData = dexReadAndVerifyClassData(&pEncodedData, NULL);
 
-    if (pClassData == NULL) {
-        fprintf(stderr, "Trouble reading class data\n");
-        return;
-    }
+  if (pClassData == NULL) {
+    fprintf(stderr, "Trouble reading class data\n");
+    return;
+  }
 
-    printf("Class #%d header:\n", idx);
-    printf("class_idx           : %d\n", pClassDef->classIdx);
-    printf("access_flags        : %d (0x%04x)\n",
-        pClassDef->accessFlags, pClassDef->accessFlags);
-    printf("superclass_idx      : %d\n", pClassDef->superclassIdx);
-    printf("interfaces_off      : %d (0x%06x)\n",
-        pClassDef->interfacesOff, pClassDef->interfacesOff);
-    printf("source_file_idx     : %d\n", pClassDef->sourceFileIdx);
-    printf("annotations_off     : %d (0x%06x)\n",
-        pClassDef->annotationsOff, pClassDef->annotationsOff);
-    printf("class_data_off      : %d (0x%06x)\n",
-        pClassDef->classDataOff, pClassDef->classDataOff);
-    printf("static_fields_size  : %d\n", pClassData->header.staticFieldsSize);
-    printf("instance_fields_size: %d\n",
-            pClassData->header.instanceFieldsSize);
-    printf("direct_methods_size : %d\n", pClassData->header.directMethodsSize);
-    printf("virtual_methods_size: %d\n",
-            pClassData->header.virtualMethodsSize);
-    printf("\n");
+  printf("Class #%d header:\n", idx);
+  printf("class_idx           : %d\n", pClassDef->classIdx);
+  printf("access_flags        : %d (0x%04x)\n", pClassDef->accessFlags,
+         pClassDef->accessFlags);
+  printf("superclass_idx      : %d\n", pClassDef->superclassIdx);
+  printf("interfaces_off      : %d (0x%06x)\n", pClassDef->interfacesOff,
+         pClassDef->interfacesOff);
+  printf("source_file_idx     : %d\n", pClassDef->sourceFileIdx);
+  printf("annotations_off     : %d (0x%06x)\n", pClassDef->annotationsOff,
+         pClassDef->annotationsOff);
+  printf("class_data_off      : %d (0x%06x)\n", pClassDef->classDataOff,
+         pClassDef->classDataOff);
+  printf("static_fields_size  : %d\n", pClassData->header.staticFieldsSize);
+  printf("instance_fields_size: %d\n", pClassData->header.instanceFieldsSize);
+  printf("direct_methods_size : %d\n", pClassData->header.directMethodsSize);
+  printf("virtual_methods_size: %d\n", pClassData->header.virtualMethodsSize);
+  printf("\n");
 
-    free(pClassData);
+  free(pClassData);
 }
 
 /*
  * Dump an interface that a class declares to implement.
  */
-void dumpInterface(const DexFile* pDexFile, const DexTypeItem* pTypeItem,
-    int i)
-{
-    const char* interfaceName =
-        dexStringByTypeIdx(pDexFile, pTypeItem->typeIdx);
+void dumpInterface(const DexFile *pDexFile, const DexTypeItem *pTypeItem,
+                   int i) {
+  const char *interfaceName = dexStringByTypeIdx(pDexFile, pTypeItem->typeIdx);
 
-    if (gOptions.outputFormat == OUTPUT_PLAIN) {
-        printf("    #%d              : '%s'\n", i, interfaceName);
-    } else {
-        char* dotted = descriptorToDot(interfaceName);
-        printf("<implements name=\"%s\">\n</implements>\n", dotted);
-        free(dotted);
-    }
+  if (gOptions.outputFormat == OUTPUT_PLAIN) {
+    printf("    #%d              : '%s'\n", i, interfaceName);
+  } else {
+    char *dotted = descriptorToDot(interfaceName);
+    printf("<implements name=\"%s\">\n</implements>\n", dotted);
+    free(dotted);
+  }
 }
 
 /*
  * Dump the catches table associated with the code.
  */
-void dumpCatches(DexFile* pDexFile, const DexCode* pCode)
-{
-    u4 triesSize = pCode->triesSize;
+void dumpCatches(DexFile *pDexFile, const DexCode *pCode) {
+  u4 triesSize = pCode->triesSize;
 
-    if (triesSize == 0) {
-        printf("      catches       : (none)\n");
-        return;
-    } 
+  if (triesSize == 0) {
+    printf("      catches       : (none)\n");
+    return;
+  }
 
-    printf("      catches       : %d\n", triesSize);
+  printf("      catches       : %d\n", triesSize);
 
-    const DexTry* pTries = dexGetTries(pCode);
-    u4 i;
+  const DexTry *pTries = dexGetTries(pCode);
+  u4 i;
 
-    for (i = 0; i < triesSize; i++) {
-        const DexTry* pTry = &pTries[i];
-        u4 start = pTry->startAddr;
-        u4 end = start + pTry->insnCount;
-        DexCatchIterator iterator;
-        
-        printf("        0x%04x - 0x%04x\n", start, end);
+  for (i = 0; i < triesSize; i++) {
+    const DexTry *pTry = &pTries[i];
+    u4 start = pTry->startAddr;
+    u4 end = start + pTry->insnCount;
+    DexCatchIterator iterator;
 
-        dexCatchIteratorInit(&iterator, pCode, pTry->handlerOff);
+    printf("        0x%04x - 0x%04x\n", start, end);
 
-        for (;;) {
-            DexCatchHandler* handler = dexCatchIteratorNext(&iterator);
-            const char* descriptor;
-            
-            if (handler == NULL) {
-                break;
-            }
-            
-            descriptor = (handler->typeIdx == kDexNoIndex) ? "<any>" : 
-                dexStringByTypeIdx(pDexFile, handler->typeIdx);
-            
-            printf("          %s -> 0x%04x\n", descriptor,
-                    handler->address);
-        }
+    dexCatchIteratorInit(&iterator, pCode, pTry->handlerOff);
+
+    for (;;) {
+      DexCatchHandler *handler = dexCatchIteratorNext(&iterator);
+      const char *descriptor;
+
+      if (handler == NULL) {
+        break;
+      }
+
+      descriptor = (handler->typeIdx == kDexNoIndex)
+                       ? "<any>"
+                       : dexStringByTypeIdx(pDexFile, handler->typeIdx);
+
+      printf("          %s -> 0x%04x\n", descriptor, handler->address);
     }
+  }
 }
 
-static int dumpPositionsCb(void *cnxt, u4 address, u4 lineNum)
-{
-    printf("        0x%04x line=%d\n", address, lineNum);
-    return 0;
+static int dumpPositionsCb(void *cnxt, u4 address, u4 lineNum) {
+  printf("        0x%04x line=%d\n", address, lineNum);
+  return 0;
 }
 
 /*
  * Dump the positions list.
  */
-void dumpPositions(DexFile* pDexFile, const DexCode* pCode, 
-        const DexMethod *pDexMethod)
-{
-    printf("      positions     : \n");
-    const DexMethodId *pMethodId 
-            = dexGetMethodId(pDexFile, pDexMethod->methodIdx);
-    const char *classDescriptor
-            = dexStringByTypeIdx(pDexFile, pMethodId->classIdx);
+void dumpPositions(DexFile *pDexFile, const DexCode *pCode,
+                   const DexMethod *pDexMethod) {
+  printf("      positions     : \n");
+  const DexMethodId *pMethodId =
+      dexGetMethodId(pDexFile, pDexMethod->methodIdx);
+  const char *classDescriptor =
+      dexStringByTypeIdx(pDexFile, pMethodId->classIdx);
 
-    dexDecodeDebugInfo(pDexFile, pCode, classDescriptor, pMethodId->protoIdx,
-            pDexMethod->accessFlags, dumpPositionsCb, NULL, NULL);
+  dexDecodeDebugInfo(pDexFile, pCode, classDescriptor, pMethodId->protoIdx,
+                     pDexMethod->accessFlags, dumpPositionsCb, NULL, NULL);
 }
 
-static void dumpLocalsCb(void *cnxt, u2 reg, u4 startAddress,
-        u4 endAddress, const char *name, const char *descriptor,
-        const char *signature)
-{
-    printf("        0x%04x - 0x%04x reg=%d %s %s %s\n",
-            startAddress, endAddress, reg, name, descriptor, 
-            signature);
+static void dumpLocalsCb(void *cnxt, u2 reg, u4 startAddress, u4 endAddress,
+                         const char *name, const char *descriptor,
+                         const char *signature) {
+  printf("        0x%04x - 0x%04x reg=%d %s %s %s\n", startAddress, endAddress,
+         reg, name, descriptor, signature);
 }
 
 /*
  * Dump the locals list.
  */
-void dumpLocals(DexFile* pDexFile, const DexCode* pCode,
-        const DexMethod *pDexMethod)
-{
-    printf("      locals        : \n");
+void dumpLocals(DexFile *pDexFile, const DexCode *pCode,
+                const DexMethod *pDexMethod) {
+  printf("      locals        : \n");
 
-    const DexMethodId *pMethodId 
-            = dexGetMethodId(pDexFile, pDexMethod->methodIdx);
-    const char *classDescriptor 
-            = dexStringByTypeIdx(pDexFile, pMethodId->classIdx);
+  const DexMethodId *pMethodId =
+      dexGetMethodId(pDexFile, pDexMethod->methodIdx);
+  const char *classDescriptor =
+      dexStringByTypeIdx(pDexFile, pMethodId->classIdx);
 
-    dexDecodeDebugInfo(pDexFile, pCode, classDescriptor, pMethodId->protoIdx,
-            pDexMethod->accessFlags, NULL, dumpLocalsCb, NULL);
+  dexDecodeDebugInfo(pDexFile, pCode, classDescriptor, pMethodId->protoIdx,
+                     pDexMethod->accessFlags, NULL, dumpLocalsCb, NULL);
 }
 
 /*
  * Get information about a method.
  */
-bool getMethodInfo(DexFile* pDexFile, u4 methodIdx, FieldMethodInfo* pMethInfo)
-{
-    const DexMethodId* pMethodId;
+bool getMethodInfo(DexFile *pDexFile, u4 methodIdx,
+                   FieldMethodInfo *pMethInfo) {
+  const DexMethodId *pMethodId;
 
-    if (methodIdx >= pDexFile->pHeader->methodIdsSize)
-        return false;
+  if (methodIdx >= pDexFile->pHeader->methodIdsSize)
+    return false;
 
-    pMethodId = dexGetMethodId(pDexFile, methodIdx);
-    pMethInfo->name = dexStringById(pDexFile, pMethodId->nameIdx);
-    pMethInfo->signature = dexCopyDescriptorFromMethodId(pDexFile, pMethodId);
+  pMethodId = dexGetMethodId(pDexFile, methodIdx);
+  pMethInfo->name = dexStringById(pDexFile, pMethodId->nameIdx);
+  pMethInfo->signature = dexCopyDescriptorFromMethodId(pDexFile, pMethodId);
 
-    pMethInfo->classDescriptor = 
-            dexStringByTypeIdx(pDexFile, pMethodId->classIdx);
-    return true;
+  pMethInfo->classDescriptor =
+      dexStringByTypeIdx(pDexFile, pMethodId->classIdx);
+  return true;
 }
 
 /*
  * Get information about a field.
  */
-bool getFieldInfo(DexFile* pDexFile, u4 fieldIdx, FieldMethodInfo* pFieldInfo)
-{
-    const DexFieldId* pFieldId;
+bool getFieldInfo(DexFile *pDexFile, u4 fieldIdx, FieldMethodInfo *pFieldInfo) {
+  const DexFieldId *pFieldId;
 
-    if (fieldIdx >= pDexFile->pHeader->fieldIdsSize)
-        return false;
+  if (fieldIdx >= pDexFile->pHeader->fieldIdsSize)
+    return false;
 
-    pFieldId = dexGetFieldId(pDexFile, fieldIdx);
-    pFieldInfo->name = dexStringById(pDexFile, pFieldId->nameIdx);
-    pFieldInfo->signature = dexStringByTypeIdx(pDexFile, pFieldId->typeIdx);
-    pFieldInfo->classDescriptor =
-        dexStringByTypeIdx(pDexFile, pFieldId->classIdx);
-    return true;
+  pFieldId = dexGetFieldId(pDexFile, fieldIdx);
+  pFieldInfo->name = dexStringById(pDexFile, pFieldId->nameIdx);
+  pFieldInfo->signature = dexStringByTypeIdx(pDexFile, pFieldId->typeIdx);
+  pFieldInfo->classDescriptor =
+      dexStringByTypeIdx(pDexFile, pFieldId->classIdx);
+  return true;
 }
-
 
 /*
  * Look up a class' descriptor.
  */
-const char* getClassDescriptor(DexFile* pDexFile, u4 classIdx)
-{
-    return dexStringByTypeIdx(pDexFile, classIdx);
+const char *getClassDescriptor(DexFile *pDexFile, u4 classIdx) {
+  return dexStringByTypeIdx(pDexFile, classIdx);
 }
 
 /*
  * Dump a single instruction.
  */
-TreeConstructor::Node dumpInstruction(DexFile* pDexFile, 
-	const DexCode* pCode,
-	int insnIdx,
-    int insnWidth,
-	const DecodedInstruction* pDecInsn)
-{
-	// Modified Tool
-	auto const margin_str = std::string(4, ' ');
-	std::string buff_str;
+TreeConstructor::Node dumpInstruction(DexFile *pDexFile, const DexCode *pCode,
+                                      int insnIdx, int insnWidth,
+                                      const DecodedInstruction *pDecInsn) {
+  // Modified Tool
+  auto const margin_str = std::string(4, ' ');
+  std::string buff_str;
 
-	std::stringstream instructions;
-	std::stringstream node_insns;
+  std::stringstream instructions;
+  std::stringstream node_insns;
 
-    const u2* insns = pCode->insns;
-    int i;
+  const u2 *insns = pCode->insns;
+  int i;
 
-    printf("%06x:", ((u1*)insns - pDexFile->baseAddr) + insnIdx*2);
-	// Modified Tool
-	tc_str_format(buff_str, "%06x:", ((u1*)insns - pDexFile->baseAddr) + insnIdx * 2);
-	instructions << margin_str << buff_str << " ";
-    for (i = 0; i < 8; i++) {
-        if (i < insnWidth) {
-            if (i == 7) {
-                printf(" ... ");
-            } else {
-                /* print 16-bit value in little-endian order */
-                const u1* bytePtr = (const u1*) &insns[insnIdx+i];
-                printf(" %02x%02x", bytePtr[0], bytePtr[1]);
-				// Modified Tool
-				tc_str_format(buff_str, " %02x%02x", bytePtr[0], bytePtr[1]);
-				instructions << margin_str << buff_str << " ";
-            }
-        } else {
-            fputs("     ", stdout);
-        }
-    }
-    
-	if (pDecInsn->opCode == OP_NOP) {
-        u2 instr = get2LE((const u1*) &insns[insnIdx]);
-        if (instr == kPackedSwitchSignature) {
-            printf("|%04x: packed-switch-data (%d units)",
-                insnIdx, insnWidth);
-			// Modified Tool
-			tc_str_format(buff_str, "%04x: packed-switch-data (%d units)",
-				insnIdx, insnWidth);
-			instructions << margin_str << "|" << buff_str << " ";
-			node_insns << buff_str;
-        } else if (instr == kSparseSwitchSignature) {
-            printf("|%04x: sparse-switch-data (%d units)",
-                insnIdx, insnWidth);
-			// Modified Tool
-			tc_str_format(buff_str, "%04x: sparse-switch-data (%d units)",
-				insnIdx, insnWidth);
-			instructions << margin_str << "|" << buff_str << " ";
-			node_insns << buff_str;
-        } else if (instr == kArrayDataSignature) {
-            printf("|%04x: array-data (%d units)",
-                insnIdx, insnWidth);
-			// Modified Tool
-			tc_str_format(buff_str, "%04x: array-data (%d units)",
-				insnIdx, insnWidth);
-			instructions << margin_str << "|" << buff_str << " ";
-			node_insns << buff_str;
-        } else {
-            printf("|%04x: nop // spacer", insnIdx);
-			// Modified Tool
-			tc_str_format(buff_str, "%04x: nop // spacer", insnIdx);
-			instructions << margin_str << "|" << buff_str << " ";
-			node_insns << buff_str;
-        }
+  printf("%06x:", ((u1 *)insns - pDexFile->baseAddr) + insnIdx * 2);
+  // Modified Tool
+  tc_str_format(buff_str, "%06x:",
+                ((u1 *)insns - pDexFile->baseAddr) + insnIdx * 2);
+  instructions << margin_str << buff_str << " ";
+  for (i = 0; i < 8; i++) {
+    if (i < insnWidth) {
+      if (i == 7) {
+        printf(" ... ");
+      } else {
+        /* print 16-bit value in little-endian order */
+        const u1 *bytePtr = (const u1 *)&insns[insnIdx + i];
+        printf(" %02x%02x", bytePtr[0], bytePtr[1]);
+        // Modified Tool
+        tc_str_format(buff_str, " %02x%02x", bytePtr[0], bytePtr[1]);
+        instructions << margin_str << buff_str << " ";
+      }
     } else {
-        printf("|%04x: %s", insnIdx, getOpcodeName(pDecInsn->opCode));
-		// Modified Tool
-		tc_str_format(buff_str, "%04x: %s", insnIdx, getOpcodeName(pDecInsn->opCode));
-		instructions << margin_str << "|" << buff_str << " ";
-		node_insns << buff_str;
+      fputs("     ", stdout);
     }
+  }
 
-    switch (dexGetInstrFormat(gInstrFormat, pDecInsn->opCode)) {
-    case kFmt10x:        // op
-        break;
-    case kFmt12x:        // op vA, vB
-        printf(" v%d, v%d", pDecInsn->vA, pDecInsn->vB);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt11n:        // op vA, #+B
-        printf(" v%d, #int %d // #%x",
-            pDecInsn->vA, (s4)pDecInsn->vB, (u1)pDecInsn->vB);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, #int %d // #%x",
-			pDecInsn->vA, (s4)pDecInsn->vB, (u1)pDecInsn->vB);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt11x:        // op vAA
-        printf(" v%d", pDecInsn->vA);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d", pDecInsn->vA);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt10t:        // op +AA
-    case kFmt20t:        // op +AAAA
-        {
-            s4 targ = (s4) pDecInsn->vA;
-            printf(" %04x // %c%04x",
-                insnIdx + targ,
-                (targ < 0) ? '-' : '+',
-                (targ < 0) ? -targ : targ);
-			// Modified Tool
-			tc_str_format(buff_str, " %04x // %c%04x",
-				insnIdx + targ,
-				(targ < 0) ? '-' : '+',
-				(targ < 0) ? -targ : targ);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
-        }
-        break;
-    case kFmt22x:        // op vAA, vBBBB
-        printf(" v%d, v%d", pDecInsn->vA, pDecInsn->vB);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt21t:        // op vAA, +BBBB
-        {
-            s4 targ = (s4) pDecInsn->vB;
-            printf(" v%d, %04x // %c%04x", pDecInsn->vA,
-                insnIdx + targ,
-                (targ < 0) ? '-' : '+',
-                (targ < 0) ? -targ : targ);
-			// Modified Tool
-			tc_str_format(buff_str, " v%d, %04x // %c%04x", pDecInsn->vA,
-				insnIdx + targ,
-				(targ < 0) ? '-' : '+',
-				(targ < 0) ? -targ : targ);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
-        }
-        break;
-    case kFmt21s:        // op vAA, #+BBBB
-        printf(" v%d, #int %d // #%x",
-            pDecInsn->vA, (s4)pDecInsn->vB, (u2)pDecInsn->vB);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, #int %d // #%x",
-			pDecInsn->vA, (s4)pDecInsn->vB, (u2)pDecInsn->vB);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt21h:        // op vAA, #+BBBB0000[00000000]
-        // The printed format varies a bit based on the actual opcode.
-        if (pDecInsn->opCode == OP_CONST_HIGH16) {
-            s4 value = pDecInsn->vB << 16;
-            printf(" v%d, #int %d // #%x",
-                pDecInsn->vA, value, (u2)pDecInsn->vB);
-			// Modified Tool
-			tc_str_format(buff_str, " v%d, #int %d // #%x",
-				pDecInsn->vA, value, (u2)pDecInsn->vB);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
-        } else {
-            s8 value = ((s8) pDecInsn->vB) << 48;
-            printf(" v%d, #long %lld // #%x",
-                pDecInsn->vA, value, (u2)pDecInsn->vB);
-			// Modified Tool
-			tc_str_format(buff_str, " v%d, #long %lld // #%x",
-				pDecInsn->vA, value, (u2)pDecInsn->vB);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
-        }
-        break;
-    case kFmt21c:        // op vAA, thing@BBBB
-        if (pDecInsn->opCode == OP_CONST_STRING) {
-            printf(" v%d, \"%s\" // string@%04x", pDecInsn->vA,
-                dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
-			// Modified Tool
-			tc_str_format(buff_str, " v%d, \"%s\" // string@%04x", pDecInsn->vA,
-				dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
-        } else if (pDecInsn->opCode == OP_CHECK_CAST ||
-                   pDecInsn->opCode == OP_NEW_INSTANCE ||
-                   pDecInsn->opCode == OP_CONST_CLASS)
-        {
-            printf(" v%d, %s // class@%04x", pDecInsn->vA,
-                getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
-			// Modified Tool
-			tc_str_format(buff_str, " v%d, %s // class@%04x", pDecInsn->vA,
-				getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
-        } else /* OP_SGET* */ {
-            FieldMethodInfo fieldInfo;
-            if (getFieldInfo(pDexFile, pDecInsn->vB, &fieldInfo)) {
-                printf(" v%d, %s.%s:%s // field@%04x", pDecInsn->vA,
-                    fieldInfo.classDescriptor, fieldInfo.name,
-                    fieldInfo.signature, pDecInsn->vB);
-				// Modified Tool
-				tc_str_format(buff_str, " v%d, %s.%s:%s // field@%04x", pDecInsn->vA,
-					fieldInfo.classDescriptor, fieldInfo.name,
-					fieldInfo.signature, pDecInsn->vB);
-				instructions << margin_str << buff_str << " ";
-				node_insns << buff_str;
-            } else {
-                printf(" v%d, ??? // field@%04x", pDecInsn->vA, pDecInsn->vB);
-				// Modified Tool
-				tc_str_format(buff_str, " v%d, ??? // field@%04x", pDecInsn->vA, pDecInsn->vB);
-				instructions << margin_str << buff_str << " ";
-				node_insns << buff_str;
-            }
-        }
-        break;
-    case kFmt23x:        // op vAA, vBB, vCC
-        printf(" v%d, v%d, v%d", pDecInsn->vA, pDecInsn->vB, pDecInsn->vC);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, v%d, v%d", pDecInsn->vA, pDecInsn->vB, pDecInsn->vC);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt22b:        // op vAA, vBB, #+CC
-        printf(" v%d, v%d, #int %d // #%02x",
-            pDecInsn->vA, pDecInsn->vB, (s4)pDecInsn->vC, (u1)pDecInsn->vC);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, v%d, #int %d // #%02x",
-			pDecInsn->vA, pDecInsn->vB, (s4)pDecInsn->vC, (u1)pDecInsn->vC);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt22t:        // op vA, vB, +CCCC
-        {
-            s4 targ = (s4) pDecInsn->vC;
-            printf(" v%d, v%d, %04x // %c%04x", pDecInsn->vA, pDecInsn->vB,
-                insnIdx + targ,
-                (targ < 0) ? '-' : '+',
-                (targ < 0) ? -targ : targ);
-			// Modified Tool
-			tc_str_format(buff_str, " v%d, v%d, %04x // %c%04x", pDecInsn->vA, pDecInsn->vB,
-				insnIdx + targ,
-				(targ < 0) ? '-' : '+',
-				(targ < 0) ? -targ : targ);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
-        }
-        break;
-    case kFmt22s:        // op vA, vB, #+CCCC
-        printf(" v%d, v%d, #int %d // #%04x",
-            pDecInsn->vA, pDecInsn->vB, (s4)pDecInsn->vC, (u2)pDecInsn->vC);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, v%d, #int %d // #%04x",
-			pDecInsn->vA, pDecInsn->vB, (s4)pDecInsn->vC, (u2)pDecInsn->vC);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt22c:        // op vA, vB, thing@CCCC
-        if (pDecInsn->opCode >= OP_IGET && pDecInsn->opCode <= OP_IPUT_SHORT) {
-            FieldMethodInfo fieldInfo;
-            if (getFieldInfo(pDexFile, pDecInsn->vC, &fieldInfo)) {
-                printf(" v%d, v%d, %s.%s:%s // field@%04x", pDecInsn->vA,
-                    pDecInsn->vB, fieldInfo.classDescriptor, fieldInfo.name,
-                    fieldInfo.signature, pDecInsn->vC);
-				// Modified Tool
-				tc_str_format(buff_str, " v%d, v%d, %s.%s:%s // field@%04x", pDecInsn->vA,
-					pDecInsn->vB, fieldInfo.classDescriptor, fieldInfo.name,
-					fieldInfo.signature, pDecInsn->vC);
-				instructions << margin_str << buff_str << " ";
-				node_insns << buff_str;
-            } else {
-                printf(" v%d, v%d, ??? // field@%04x", pDecInsn->vA,
-                    pDecInsn->vB, pDecInsn->vC);
-				// Modified Tool
-				tc_str_format(buff_str, " v%d, v%d, ??? // field@%04x", pDecInsn->vA,
-					pDecInsn->vB, pDecInsn->vC);
-				instructions << margin_str << buff_str << " ";
-				node_insns << buff_str;
-            }
-        } else {
-            printf(" v%d, v%d, %s // class@%04x",
-                pDecInsn->vA, pDecInsn->vB,
-                getClassDescriptor(pDexFile, pDecInsn->vC), pDecInsn->vC);
-			// Modified Tool
-			tc_str_format(buff_str, " v%d, v%d, %s // class@%04x",
-				pDecInsn->vA, pDecInsn->vB,
-				getClassDescriptor(pDexFile, pDecInsn->vC), pDecInsn->vC);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
-        }
-        break;
-    case kFmt22cs:       // [opt] op vA, vB, field offset CCCC
-        printf(" v%d, v%d, [obj+%04x]",
-            pDecInsn->vA, pDecInsn->vB, pDecInsn->vC);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, v%d, [obj+%04x]",
-			pDecInsn->vA, pDecInsn->vB, pDecInsn->vC);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt30t:
-        printf(" #%08x", pDecInsn->vA);
-		// Modified Tool
-		tc_str_format(buff_str, " #%08x", pDecInsn->vA);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt31i:        // op vAA, #+BBBBBBBB
-        {
-            /* this is often, but not always, a float */
-            union {
-                float f;
-                u4 i;
-            } conv;
-            conv.i = pDecInsn->vB;
-            printf(" v%d, #float %f // #%08x",
-                pDecInsn->vA, conv.f, pDecInsn->vB);
-			// Modified Tool
-			tc_str_format(buff_str, " v%d, #float %f // #%08x",
-				pDecInsn->vA, conv.f, pDecInsn->vB);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
-        }
-        break;
-    case kFmt31c:        // op vAA, thing@BBBBBBBB
-        printf(" v%d, \"%s\" // string@%08x", pDecInsn->vA,
-            dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, \"%s\" // string@%08x", pDecInsn->vA,
-			dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
-		node_insns << buff_str;
-		instructions << margin_str << buff_str << " ";
-        break;
-    case kFmt31t:       // op vAA, offset +BBBBBBBB
-        printf(" v%d, %08x // +%08x",
-            pDecInsn->vA, insnIdx + pDecInsn->vB, pDecInsn->vB);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, %08x // +%08x",
-			pDecInsn->vA, insnIdx + pDecInsn->vB, pDecInsn->vB);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt32x:        // op vAAAA, vBBBB
-        printf(" v%d, v%d", pDecInsn->vA, pDecInsn->vB);
-		// Modified Tool
-		tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
-    case kFmt35c:        // op vB, {vD, vE, vF, vG, vA}, thing@CCCC
-        {
-            /* NOTE: decoding of 35c doesn't quite match spec */
-            fputs(" {", stdout);
-            for (i = 0; i < (int) pDecInsn->vA; i++) {
-				if (i == 0)
-				{
-					printf("v%d", pDecInsn->arg[i]);
-					// Modified Tool
-					tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
-					instructions << " {" << buff_str;
-					node_insns << " {" << buff_str;
-				}                   
-				else
-				{
-					printf(", v%d", pDecInsn->arg[i]);
-					// Modified Tool
-					tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
-					instructions << " {" << buff_str;
-					node_insns << " {" << buff_str;
-				}
-                   
-            }
-            if (pDecInsn->opCode == OP_FILLED_NEW_ARRAY) {
-                printf("}, %s // class@%04x",
-                    getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
-				// Modified Tool
-				tc_str_format(buff_str, "}, %s // class@%04x",
-					getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
-				instructions << buff_str << " ";
-				node_insns << buff_str;
-            } else {
-                FieldMethodInfo methInfo;
-                if (getMethodInfo(pDexFile, pDecInsn->vB, &methInfo)) {
-                    printf("}, %s.%s:%s // method@%04x",
-                        methInfo.classDescriptor, methInfo.name,
-                        methInfo.signature, pDecInsn->vB);
-					// Modified Tool
-					tc_str_format(buff_str, "}, %s.%s:%s // method@%04x",
-						methInfo.classDescriptor, methInfo.name,
-						methInfo.signature, pDecInsn->vB);
-					instructions << buff_str << " ";
-					node_insns << buff_str;
-                } else {
-                    printf("}, ??? // method@%04x", pDecInsn->vB);
-					// Modified Tool
-					tc_str_format(buff_str, "}, ??? // method@%04x", pDecInsn->vB);
-					instructions << buff_str << " ";
-					node_insns << buff_str;
-                }
-            }
-        }
-        break;
-    case kFmt35ms:       // [opt] invoke-virtual+super
-    case kFmt35fs:       // [opt] invoke-interface
-        {
-            fputs(" {", stdout);
-            for (i = 0; i < (int) pDecInsn->vA; i++) {
-				if (i == 0)
-				{
-					printf("v%d", pDecInsn->arg[i]);
-					// Modified Tool
-					tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
-					instructions <<  " {" << buff_str;
-					node_insns << " {" << buff_str;
-				}                   
-				else
-				{
-					printf(", v%d", pDecInsn->arg[i]);
-					// Modified Tool
-					tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
-					instructions << " {" << buff_str;
-					node_insns << " {" << buff_str;
-				}       
-            }
-            printf("}, [%04x] // vtable #%04x", pDecInsn->vB, pDecInsn->vB);
-			// Modified Tool
-			tc_str_format(buff_str, "}, [%04x] // vtable #%04x", pDecInsn->vB, pDecInsn->vB);
-			instructions << buff_str << " ";
-			node_insns << buff_str;
-        }
-        break;
-    case kFmt3rc:        // op {vCCCC .. v(CCCC+AA-1)}, meth@BBBB
-        {
-            /*
-             * This doesn't match the "dx" output when some of the args are
-             * 64-bit values -- dx only shows the first register.
-             */
-            fputs(" {", stdout);
-            for (i = 0; i < (int) pDecInsn->vA; i++) {
-				if (i == 0)
-				{
-					printf("v%d", pDecInsn->vC + i);
-					// Modified Tool
-					tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
-					instructions << " {" << buff_str;
-					node_insns << buff_str;
-				}
-				else
-				{
-					printf(", v%d", pDecInsn->vC + i);
-					// Modified Tool
-					tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
-					instructions << " {" << buff_str;
-					node_insns << buff_str;
-				}       
-            }
-            if (pDecInsn->opCode == OP_FILLED_NEW_ARRAY_RANGE) {
-                printf("}, %s // class@%04x",
-                    getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
-				// Modified Tool
-				tc_str_format(buff_str, "}, %s // class@%04x",
-					getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
-				instructions << buff_str << " ";
-				node_insns << buff_str;
-            } else {
-                FieldMethodInfo methInfo;
-                if (getMethodInfo(pDexFile, pDecInsn->vB, &methInfo)) {
-                    printf("}, %s.%s:%s // method@%04x",
-                        methInfo.classDescriptor, methInfo.name,
-                        methInfo.signature, pDecInsn->vB);
-					// Modified Tool
-					tc_str_format(buff_str, "}, %s.%s:%s // method@%04x",
-						methInfo.classDescriptor, methInfo.name,
-						methInfo.signature, pDecInsn->vB);
-					instructions << buff_str << " ";
-					node_insns << buff_str;
-                } else {
-                    printf("}, ??? // method@%04x", pDecInsn->vB);
-					// Modified Tool
-					tc_str_format(buff_str, "}, ??? // method@%04x", pDecInsn->vB);
-					instructions << buff_str << " ";
-					node_insns << buff_str;
-                }
-            }
-        }
-        break;
-    case kFmt3rms:       // [opt] invoke-virtual+super/range
-    case kFmt3rfs:       // [opt] invoke-interface/range
-        {
-            /*
-             * This doesn't match the "dx" output when some of the args are
-             * 64-bit values -- dx only shows the first register.
-             */
-            fputs(" {", stdout);
-            for (i = 0; i < (int) pDecInsn->vA; i++) {
-				if (i == 0)
-				{
-					printf("v%d", pDecInsn->vC + i);
-					// Modified Tool
-					tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
-					instructions << " {" << buff_str;
-					node_insns << " {" << buff_str;
-				} 
-				else
-				{
-					printf(", v%d", pDecInsn->vC + i);
-					// Modified Tool
-					tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
-					instructions << " {" << buff_str;
-					node_insns << " {" << buff_str;
-				}      
-            }
-            printf("}, [%04x] // vtable #%04x", pDecInsn->vB, pDecInsn->vB);
-			// Modified Tool
-			tc_str_format(buff_str, "}, [%04x] // vtable #%04x", pDecInsn->vB, pDecInsn->vB);
-			instructions << buff_str << " ";
-			node_insns << buff_str;
-        }
-        break;
-    case kFmt3rinline:   // [opt] execute-inline/range
-        {
-            fputs(" {", stdout);
-            for (i = 0; i < (int) pDecInsn->vA; i++) {
-				if (i == 0)
-				{
-					printf("v%d", pDecInsn->vC + i);
-					// Modified Tool
-					tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
-					instructions << " {" << buff_str;
-					node_insns << " {" << buff_str;
-				}                   
-				else
-				{
-					printf(", v%d", pDecInsn->vC + i);
-					// Modified Tool
-					tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
-					instructions << " {" << buff_str;
-					node_insns << " {" << buff_str;
-				}    
-            }
-            printf("}, [%04x] // inline #%04x", pDecInsn->vB, pDecInsn->vB);
-			// Modified Tool
-			tc_str_format(buff_str, "}, [%04x] // inline #%04x", pDecInsn->vB, pDecInsn->vB);
-			instructions << buff_str << " ";
-			node_insns << buff_str;
-        }
-        break;
-    case kFmt3inline:    // [opt] inline invoke
-        {
-            fputs(" {", stdout);
-            for (i = 0; i < (int) pDecInsn->vA; i++) {
-				if (i == 0)
-				{
-					printf("v%d", pDecInsn->arg[i]);
-					// Modified Tool
-					tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
-					instructions << " {" << buff_str;
-					node_insns << " {" << buff_str;
-				}
-				else
-				{
-					printf(", v%d", pDecInsn->arg[i]);
-					// Modified Tool
-					tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
-					instructions << " {" << buff_str;
-					node_insns << " {" << buff_str;
-				}
-            }
-			printf("}, [%04x] // inline #%04x", pDecInsn->vB, pDecInsn->vB);
-			// Modified Tool
-			tc_str_format(buff_str, "}, [%04x] // inline #%04x", pDecInsn->vB, pDecInsn->vB);
-			instructions << buff_str << " ";
-			node_insns << buff_str;
-        }
-        break;
-    case kFmt51l:        // op vAA, #+BBBBBBBBBBBBBBBB
-        {
-            /* this is often, but not always, a double */
-            union {
-                double d;
-                u8 j;
-            } conv;
-            conv.j = pDecInsn->vB_wide;
-            printf(" v%d, #double %f // #%016llx",
-                pDecInsn->vA, conv.d, pDecInsn->vB_wide);
-			// Modified Tool
-			tc_str_format(buff_str, " v%d, #double %f // #%016llx",
-				pDecInsn->vA, conv.d, pDecInsn->vB_wide);
-			instructions << margin_str << buff_str << " ";
-			node_insns << buff_str;
-        }
-        break;
-    case kFmtUnknown:
-        break;
-    default:
-        printf(" ???");
-		// Modified Tool
-		tc_str_format(buff_str, " ???");
-		instructions << margin_str << buff_str << " ";
-		node_insns << buff_str;
-        break;
+  if (pDecInsn->opCode == OP_NOP) {
+    u2 instr = get2LE((const u1 *)&insns[insnIdx]);
+    if (instr == kPackedSwitchSignature) {
+      printf("|%04x: packed-switch-data (%d units)", insnIdx, insnWidth);
+      // Modified Tool
+      tc_str_format(buff_str, "%04x: packed-switch-data (%d units)", insnIdx,
+                    insnWidth);
+      instructions << margin_str << "|" << buff_str << " ";
+      node_insns << buff_str;
+    } else if (instr == kSparseSwitchSignature) {
+      printf("|%04x: sparse-switch-data (%d units)", insnIdx, insnWidth);
+      // Modified Tool
+      tc_str_format(buff_str, "%04x: sparse-switch-data (%d units)", insnIdx,
+                    insnWidth);
+      instructions << margin_str << "|" << buff_str << " ";
+      node_insns << buff_str;
+    } else if (instr == kArrayDataSignature) {
+      printf("|%04x: array-data (%d units)", insnIdx, insnWidth);
+      // Modified Tool
+      tc_str_format(buff_str, "%04x: array-data (%d units)", insnIdx,
+                    insnWidth);
+      instructions << margin_str << "|" << buff_str << " ";
+      node_insns << buff_str;
+    } else {
+      printf("|%04x: nop // spacer", insnIdx);
+      // Modified Tool
+      tc_str_format(buff_str, "%04x: nop // spacer", insnIdx);
+      instructions << margin_str << "|" << buff_str << " ";
+      node_insns << buff_str;
     }
+  } else {
+    printf("|%04x: %s", insnIdx, getOpcodeName(pDecInsn->opCode));
+    // Modified Tool
+    tc_str_format(buff_str, "%04x: %s", insnIdx,
+                  getOpcodeName(pDecInsn->opCode));
+    instructions << margin_str << "|" << buff_str << " ";
+    node_insns << buff_str;
+  }
 
+  switch (dexGetInstrFormat(gInstrFormat, pDecInsn->opCode)) {
+  case kFmt10x: // op
+    break;
+  case kFmt12x: // op vA, vB
+    printf(" v%d, v%d", pDecInsn->vA, pDecInsn->vB);
+    // Modified Tool
+    tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
+    instructions << margin_str << buff_str << " ";
+    node_insns << buff_str;
+    break;
+  case kFmt11n: // op vA, #+B
+    printf(" v%d, #int %d // #%x", pDecInsn->vA, (s4)pDecInsn->vB,
+           (u1)pDecInsn->vB);
+    // Modified Tool
+    tc_str_format(buff_str, " v%d, #int %d // #%x", pDecInsn->vA,
+                  (s4)pDecInsn->vB, (u1)pDecInsn->vB);
+    instructions << margin_str << buff_str << " ";
+    node_insns << buff_str;
+    break;
+  case kFmt11x: // op vAA
+    printf(" v%d", pDecInsn->vA);
+    // Modified Tool
+    tc_str_format(buff_str, " v%d", pDecInsn->vA);
+    instructions << margin_str << buff_str << " ";
+    node_insns << buff_str;
+    break;
+  case kFmt10t: // op +AA
+  case kFmt20t: // op +AAAA
+  {
+    s4 targ = (s4)pDecInsn->vA;
+    printf(" %04x // %c%04x", insnIdx + targ, (targ < 0) ? '-' : '+',
+           (targ < 0) ? -targ : targ);
+    // Modified Tool
+    tc_str_format(buff_str, " %04x // %c%04x", insnIdx + targ,
+                  (targ < 0) ? '-' : '+', (targ < 0) ? -targ : targ);
+    instructions << margin_str << buff_str << " ";
+    node_insns << buff_str;
+  } break;
+  case kFmt22x: // op vAA, vBBBB
+    printf(" v%d, v%d", pDecInsn->vA, pDecInsn->vB);
+    // Modified Tool
+    tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
+    instructions << margin_str << buff_str << " ";
+    node_insns << buff_str;
+    break;
+  case kFmt21t: // op vAA, +BBBB
+  {
+    s4 targ = (s4)pDecInsn->vB;
+    printf(" v%d, %04x // %c%04x", pDecInsn->vA, insnIdx + targ,
+           (targ < 0) ? '-' : '+', (targ < 0) ? -targ : targ);
+    // Modified Tool
+    tc_str_format(buff_str, " v%d, %04x // %c%04x", pDecInsn->vA,
+                  insnIdx + targ, (targ < 0) ? '-' : '+',
+                  (targ < 0) ? -targ : targ);
+    instructions << margin_str << buff_str << " ";
+    node_insns << buff_str;
+  } break;
+  case kFmt21s: // op vAA, #+BBBB
+    printf(" v%d, #int %d // #%x", pDecInsn->vA, (s4)pDecInsn->vB,
+           (u2)pDecInsn->vB);
+    // Modified Tool
+    tc_str_format(buff_str, " v%d, #int %d // #%x", pDecInsn->vA,
+                  (s4)pDecInsn->vB, (u2)pDecInsn->vB);
+    instructions << margin_str << buff_str << " ";
+    node_insns << buff_str;
+    break;
+  case kFmt21h: // op vAA, #+BBBB0000[00000000]
+    // The printed format varies a bit based on the actual opcode.
+    if (pDecInsn->opCode == OP_CONST_HIGH16) {
+      s4 value = pDecInsn->vB << 16;
+      printf(" v%d, #int %d // #%x", pDecInsn->vA, value, (u2)pDecInsn->vB);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d, #int %d // #%x", pDecInsn->vA, value,
+                    (u2)pDecInsn->vB);
+      instructions << margin_str << buff_str << " ";
+      node_insns << buff_str;
+    } else {
+      s8 value = ((s8)pDecInsn->vB) << 48;
+      printf(" v%d, #long %lld // #%x", pDecInsn->vA, value, (u2)pDecInsn->vB);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d, #long %lld // #%x", pDecInsn->vA, value,
+                    (u2)pDecInsn->vB);
+      instructions << margin_str << buff_str << " ";
+      node_insns << buff_str;
+    }
+    break;
+  case kFmt21c: // op vAA, thing@BBBB
+    if (pDecInsn->opCode == OP_CONST_STRING) {
+      printf(" v%d, \"%s\" // string@%04x", pDecInsn->vA,
+             dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d, \"%s\" // string@%04x", pDecInsn->vA,
+                    dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
+      instructions << margin_str << buff_str << " ";
+      node_insns << buff_str;
+    } else if (pDecInsn->opCode == OP_CHECK_CAST ||
+               pDecInsn->opCode == OP_NEW_INSTANCE ||
+               pDecInsn->opCode == OP_CONST_CLASS) {
+      printf(" v%d, %s // class@%04x", pDecInsn->vA,
+             getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d, %s // class@%04x", pDecInsn->vA,
+                    getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
+      instructions << margin_str << buff_str << " ";
+      node_insns << buff_str;
+    } else /* OP_SGET* */ {
+      FieldMethodInfo fieldInfo;
+      if (getFieldInfo(pDexFile, pDecInsn->vB, &fieldInfo)) {
+        printf(" v%d, %s.%s:%s // field@%04x", pDecInsn->vA,
+               fieldInfo.classDescriptor, fieldInfo.name, fieldInfo.signature,
+               pDecInsn->vB);
+        // Modified Tool
+        tc_str_format(buff_str, " v%d, %s.%s:%s // field@%04x", pDecInsn->vA,
+                      fieldInfo.classDescriptor, fieldInfo.name,
+                      fieldInfo.signature, pDecInsn->vB);
+        instructions << margin_str << buff_str << " ";
+        node_insns << buff_str;
+      } else {
+        printf(" v%d, ??? // field@%04x", pDecInsn->vA, pDecInsn->vB);
+        // Modified Tool
+        tc_str_format(buff_str, " v%d, ??? // field@%04x", pDecInsn->vA,
+                      pDecInsn->vB);
+        instructions << margin_str << buff_str << " ";
+        node_insns << buff_str;
+      }
+    }
+    break;
+  case kFmt23x: // op vAA, vBB, vCC
+    printf(" v%d, v%d, v%d", pDecInsn->vA, pDecInsn->vB, pDecInsn->vC);
+    // Modified Tool
+    tc_str_format(buff_str, " v%d, v%d, v%d", pDecInsn->vA, pDecInsn->vB,
+                  pDecInsn->vC);
+    instructions << margin_str << buff_str << " ";
+    node_insns << buff_str;
+    break;
+  case kFmt22b: // op vAA, vBB, #+CC
+    printf(" v%d, v%d, #int %d // #%02x", pDecInsn->vA, pDecInsn->vB,
+           (s4)pDecInsn->vC, (u1)pDecInsn->vC);
+    // Modified Tool
+    tc_str_format(buff_str, " v%d, v%d, #int %d // #%02x", pDecInsn->vA,
+                  pDecInsn->vB, (s4)pDecInsn->vC, (u1)pDecInsn->vC);
+    instructions << margin_str << buff_str << " ";
+    node_insns << buff_str;
+    break;
+  case kFmt22t: // op vA, vB, +CCCC
+  {
+    s4 targ = (s4)pDecInsn->vC;
+    printf(" v%d, v%d, %04x // %c%04x", pDecInsn->vA, pDecInsn->vB,
+           insnIdx + targ, (targ < 0) ? '-' : '+', (targ < 0) ? -targ : targ);
+    // Modified Tool
+    tc_str_format(buff_str, " v%d, v%d, %04x // %c%04x", pDecInsn->vA,
+                  pDecInsn->vB, insnIdx + targ, (targ < 0) ? '-' : '+',
+                  (targ < 0) ? -targ : targ);
+    instructions << margin_str << buff_str << " ";
+    node_insns << buff_str;
+  } break;
+  case kFmt22s: // op vA, vB, #+CCCC
+    printf(" v%d, v%d, #int %d // #%04x", pDecInsn->vA, pDecInsn->vB,
+           (s4)pDecInsn->vC, (u2)pDecInsn->vC);
+    // Modified Tool
+    tc_str_format(buff_str, " v%d, v%d, #int %d // #%04x", pDecInsn->vA,
+                  pDecInsn->vB, (s4)pDecInsn->vC, (u2)pDecInsn->vC);
+    instructions << margin_str << buff_str << " ";
+    node_insns << buff_str;
+    break;
+  case kFmt22c: // op vA, vB, thing@CCCC
+    if (pDecInsn->opCode >= OP_IGET && pDecInsn->opCode <= OP_IPUT_SHORT) {
+      FieldMethodInfo fieldInfo;
+      if (getFieldInfo(pDexFile, pDecInsn->vC, &fieldInfo)) {
+        printf(" v%d, v%d, %s.%s:%s // field@%04x", pDecInsn->vA, pDecInsn->vB,
+               fieldInfo.classDescriptor, fieldInfo.name, fieldInfo.signature,
+               pDecInsn->vC);
+        // Modified Tool
+        tc_str_format(buff_str, " v%d, v%d, %s.%s:%s // field@%04x",
+                      pDecInsn->vA, pDecInsn->vB, fieldInfo.classDescriptor,
+                      fieldInfo.name, fieldInfo.signature, pDecInsn->vC);
+        instructions << margin_str << buff_str << " ";
+        node_insns << buff_str;
+      } else {
+        printf(" v%d, v%d, ??? // field@%04x", pDecInsn->vA, pDecInsn->vB,
+               pDecInsn->vC);
+        // Modified Tool
+        tc_str_format(buff_str, " v%d, v%d, ??? // field@%04x", pDecInsn->vA,
+                      pDecInsn->vB, pDecInsn->vC);
+        instructions << margin_str << buff_str << " ";
+        node_insns << buff_str;
+      }
+    } else {
+      printf(" v%d, v%d, %s // class@%04x", pDecInsn->vA, pDecInsn->vB,
+             getClassDescriptor(pDexFile, pDecInsn->vC), pDecInsn->vC);
+      // Modified Tool
+      tc_str_format(buff_str, " v%d, v%d, %s // class@%04x", pDecInsn->vA,
+                    pDecInsn->vB, getClassDescriptor(pDexFile, pDecInsn->vC),
+                    pDecInsn->vC);
+      instructions << margin_str << buff_str << " ";
+      node_insns << buff_str;
+    }
+    break;
+  case kFmt22cs: // [opt] op vA, vB, field offset CCCC
+    printf(" v%d, v%d, [obj+%04x]", pDecInsn->vA, pDecInsn->vB, pDecInsn->vC);
+    // Modified Tool
+    tc_str_format(buff_str, " v%d, v%d, [obj+%04x]", pDecInsn->vA, pDecInsn->vB,
+                  pDecInsn->vC);
+    instructions << margin_str << buff_str << " ";
+    node_insns << buff_str;
+    break;
+  case kFmt30t:
+    printf(" #%08x", pDecInsn->vA);
+    // Modified Tool
+    tc_str_format(buff_str, " #%08x", pDecInsn->vA);
+    instructions << margin_str << buff_str << " ";
+    node_insns << buff_str;
+    break;
+  case kFmt31i: // op vAA, #+BBBBBBBB
+  {
+    /* this is often, but not always, a float */
+    union {
+      float f;
+      u4 i;
+    } conv;
+    conv.i = pDecInsn->vB;
+    printf(" v%d, #float %f // #%08x", pDecInsn->vA, conv.f, pDecInsn->vB);
+    // Modified Tool
+    tc_str_format(buff_str, " v%d, #float %f // #%08x", pDecInsn->vA, conv.f,
+                  pDecInsn->vB);
+    instructions << margin_str << buff_str << " ";
+    node_insns << buff_str;
+  } break;
+  case kFmt31c: // op vAA, thing@BBBBBBBB
+    printf(" v%d, \"%s\" // string@%08x", pDecInsn->vA,
+           dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
+    // Modified Tool
+    tc_str_format(buff_str, " v%d, \"%s\" // string@%08x", pDecInsn->vA,
+                  dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
+    node_insns << buff_str;
+    instructions << margin_str << buff_str << " ";
+    break;
+  case kFmt31t: // op vAA, offset +BBBBBBBB
+    printf(" v%d, %08x // +%08x", pDecInsn->vA, insnIdx + pDecInsn->vB,
+           pDecInsn->vB);
+    // Modified Tool
+    tc_str_format(buff_str, " v%d, %08x // +%08x", pDecInsn->vA,
+                  insnIdx + pDecInsn->vB, pDecInsn->vB);
+    instructions << margin_str << buff_str << " ";
+    node_insns << buff_str;
+    break;
+  case kFmt32x: // op vAAAA, vBBBB
+    printf(" v%d, v%d", pDecInsn->vA, pDecInsn->vB);
+    // Modified Tool
+    tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
+    instructions << margin_str << buff_str << " ";
+    node_insns << buff_str;
+    break;
+  case kFmt35c: // op vB, {vD, vE, vF, vG, vA}, thing@CCCC
+  {
+    /* NOTE: decoding of 35c doesn't quite match spec */
+    fputs(" {", stdout);
+    for (i = 0; i < (int)pDecInsn->vA; i++) {
+      if (i == 0) {
+        printf("v%d", pDecInsn->arg[i]);
+        // Modified Tool
+        tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
+        instructions << " {" << buff_str;
+        node_insns << " {" << buff_str;
+      } else {
+        printf(", v%d", pDecInsn->arg[i]);
+        // Modified Tool
+        tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
+        instructions << " {" << buff_str;
+        node_insns << " {" << buff_str;
+      }
+    }
+    if (pDecInsn->opCode == OP_FILLED_NEW_ARRAY) {
+      printf("}, %s // class@%04x", getClassDescriptor(pDexFile, pDecInsn->vB),
+             pDecInsn->vB);
+      // Modified Tool
+      tc_str_format(buff_str, "}, %s // class@%04x",
+                    getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
+      instructions << buff_str << " ";
+      node_insns << buff_str;
+    } else {
+      FieldMethodInfo methInfo;
+      if (getMethodInfo(pDexFile, pDecInsn->vB, &methInfo)) {
+        printf("}, %s.%s:%s // method@%04x", methInfo.classDescriptor,
+               methInfo.name, methInfo.signature, pDecInsn->vB);
+        // Modified Tool
+        tc_str_format(buff_str, "}, %s.%s:%s // method@%04x",
+                      methInfo.classDescriptor, methInfo.name,
+                      methInfo.signature, pDecInsn->vB);
+        instructions << buff_str << " ";
+        node_insns << buff_str;
+      } else {
+        printf("}, ??? // method@%04x", pDecInsn->vB);
+        // Modified Tool
+        tc_str_format(buff_str, "}, ??? // method@%04x", pDecInsn->vB);
+        instructions << buff_str << " ";
+        node_insns << buff_str;
+      }
+    }
+  } break;
+  case kFmt35ms: // [opt] invoke-virtual+super
+  case kFmt35fs: // [opt] invoke-interface
+  {
+    fputs(" {", stdout);
+    for (i = 0; i < (int)pDecInsn->vA; i++) {
+      if (i == 0) {
+        printf("v%d", pDecInsn->arg[i]);
+        // Modified Tool
+        tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
+        instructions << " {" << buff_str;
+        node_insns << " {" << buff_str;
+      } else {
+        printf(", v%d", pDecInsn->arg[i]);
+        // Modified Tool
+        tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
+        instructions << " {" << buff_str;
+        node_insns << " {" << buff_str;
+      }
+    }
+    printf("}, [%04x] // vtable #%04x", pDecInsn->vB, pDecInsn->vB);
+    // Modified Tool
+    tc_str_format(buff_str, "}, [%04x] // vtable #%04x", pDecInsn->vB,
+                  pDecInsn->vB);
+    instructions << buff_str << " ";
+    node_insns << buff_str;
+  } break;
+  case kFmt3rc: // op {vCCCC .. v(CCCC+AA-1)}, meth@BBBB
+  {
+    /*
+     * This doesn't match the "dx" output when some of the args are
+     * 64-bit values -- dx only shows the first register.
+     */
+    fputs(" {", stdout);
+    for (i = 0; i < (int)pDecInsn->vA; i++) {
+      if (i == 0) {
+        printf("v%d", pDecInsn->vC + i);
+        // Modified Tool
+        tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
+        instructions << " {" << buff_str;
+        node_insns << buff_str;
+      } else {
+        printf(", v%d", pDecInsn->vC + i);
+        // Modified Tool
+        tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
+        instructions << " {" << buff_str;
+        node_insns << buff_str;
+      }
+    }
+    if (pDecInsn->opCode == OP_FILLED_NEW_ARRAY_RANGE) {
+      printf("}, %s // class@%04x", getClassDescriptor(pDexFile, pDecInsn->vB),
+             pDecInsn->vB);
+      // Modified Tool
+      tc_str_format(buff_str, "}, %s // class@%04x",
+                    getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
+      instructions << buff_str << " ";
+      node_insns << buff_str;
+    } else {
+      FieldMethodInfo methInfo;
+      if (getMethodInfo(pDexFile, pDecInsn->vB, &methInfo)) {
+        printf("}, %s.%s:%s // method@%04x", methInfo.classDescriptor,
+               methInfo.name, methInfo.signature, pDecInsn->vB);
+        // Modified Tool
+        tc_str_format(buff_str, "}, %s.%s:%s // method@%04x",
+                      methInfo.classDescriptor, methInfo.name,
+                      methInfo.signature, pDecInsn->vB);
+        instructions << buff_str << " ";
+        node_insns << buff_str;
+      } else {
+        printf("}, ??? // method@%04x", pDecInsn->vB);
+        // Modified Tool
+        tc_str_format(buff_str, "}, ??? // method@%04x", pDecInsn->vB);
+        instructions << buff_str << " ";
+        node_insns << buff_str;
+      }
+    }
+  } break;
+  case kFmt3rms: // [opt] invoke-virtual+super/range
+  case kFmt3rfs: // [opt] invoke-interface/range
+  {
+    /*
+     * This doesn't match the "dx" output when some of the args are
+     * 64-bit values -- dx only shows the first register.
+     */
+    fputs(" {", stdout);
+    for (i = 0; i < (int)pDecInsn->vA; i++) {
+      if (i == 0) {
+        printf("v%d", pDecInsn->vC + i);
+        // Modified Tool
+        tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
+        instructions << " {" << buff_str;
+        node_insns << " {" << buff_str;
+      } else {
+        printf(", v%d", pDecInsn->vC + i);
+        // Modified Tool
+        tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
+        instructions << " {" << buff_str;
+        node_insns << " {" << buff_str;
+      }
+    }
+    printf("}, [%04x] // vtable #%04x", pDecInsn->vB, pDecInsn->vB);
+    // Modified Tool
+    tc_str_format(buff_str, "}, [%04x] // vtable #%04x", pDecInsn->vB,
+                  pDecInsn->vB);
+    instructions << buff_str << " ";
+    node_insns << buff_str;
+  } break;
+  case kFmt3rinline: // [opt] execute-inline/range
+  {
+    fputs(" {", stdout);
+    for (i = 0; i < (int)pDecInsn->vA; i++) {
+      if (i == 0) {
+        printf("v%d", pDecInsn->vC + i);
+        // Modified Tool
+        tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
+        instructions << " {" << buff_str;
+        node_insns << " {" << buff_str;
+      } else {
+        printf(", v%d", pDecInsn->vC + i);
+        // Modified Tool
+        tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
+        instructions << " {" << buff_str;
+        node_insns << " {" << buff_str;
+      }
+    }
+    printf("}, [%04x] // inline #%04x", pDecInsn->vB, pDecInsn->vB);
+    // Modified Tool
+    tc_str_format(buff_str, "}, [%04x] // inline #%04x", pDecInsn->vB,
+                  pDecInsn->vB);
+    instructions << buff_str << " ";
+    node_insns << buff_str;
+  } break;
+  case kFmt3inline: // [opt] inline invoke
+  {
+    fputs(" {", stdout);
+    for (i = 0; i < (int)pDecInsn->vA; i++) {
+      if (i == 0) {
+        printf("v%d", pDecInsn->arg[i]);
+        // Modified Tool
+        tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
+        instructions << " {" << buff_str;
+        node_insns << " {" << buff_str;
+      } else {
+        printf(", v%d", pDecInsn->arg[i]);
+        // Modified Tool
+        tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
+        instructions << " {" << buff_str;
+        node_insns << " {" << buff_str;
+      }
+    }
+    printf("}, [%04x] // inline #%04x", pDecInsn->vB, pDecInsn->vB);
+    // Modified Tool
+    tc_str_format(buff_str, "}, [%04x] // inline #%04x", pDecInsn->vB,
+                  pDecInsn->vB);
+    instructions << buff_str << " ";
+    node_insns << buff_str;
+  } break;
+  case kFmt51l: // op vAA, #+BBBBBBBBBBBBBBBB
+  {
+    /* this is often, but not always, a double */
+    union {
+      double d;
+      u8 j;
+    } conv;
+    conv.j = pDecInsn->vB_wide;
+    printf(" v%d, #double %f // #%016llx", pDecInsn->vA, conv.d,
+           pDecInsn->vB_wide);
+    // Modified Tool
+    tc_str_format(buff_str, " v%d, #double %f // #%016llx", pDecInsn->vA,
+                  conv.d, pDecInsn->vB_wide);
+    instructions << margin_str << buff_str << " ";
+    node_insns << buff_str;
+  } break;
+  case kFmtUnknown:
+    break;
+  default:
+    printf(" ???");
+    // Modified Tool
+    tc_str_format(buff_str, " ???");
+    instructions << margin_str << buff_str << " ";
+    node_insns << buff_str;
+    break;
+  }
 
-    putchar('\n');
+  putchar('\n');
 
-	auto const instructions_str = instructions.str();
-	TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename, instructions_str);
+  auto const instructions_str = instructions.str();
+  TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename,
+                                 instructions_str);
 
-	// Construct Tree Node
-	auto method_node = TreeConstructor::Node(((u1*)insns - pDexFile->baseAddr) + insnIdx * 2,
-										   	 pDecInsn->opCode,
-											 node_insns.str());
+  // Construct Tree Node
+  auto method_node =
+      TreeConstructor::Node(((u1 *)insns - pDexFile->baseAddr) + insnIdx * 2,
+                            pDecInsn->opCode, node_insns.str());
 
-	return method_node;
+  return method_node;
 }
 
 /*
  * Dump a bytecode disassembly.
  */
-void dumpBytecodes(DexFile* pDexFile, const DexMethod* pDexMethod)
-{
-    const DexCode* pCode = dexGetCode(pDexFile, pDexMethod);
-    const u2* insns;
-    int insnIdx;
-    FieldMethodInfo methInfo;
-    int startAddr;
-    char* className = NULL;
+void dumpBytecodes(DexFile *pDexFile, const DexMethod *pDexMethod) {
+  const DexCode *pCode = dexGetCode(pDexFile, pDexMethod);
+  const u2 *insns;
+  int insnIdx;
+  FieldMethodInfo methInfo;
+  int startAddr;
+  char *className = NULL;
 
-    assert(pCode->insnsSize > 0);
-    insns = pCode->insns;
+  assert(pCode->insnsSize > 0);
+  insns = pCode->insns;
 
-    getMethodInfo(pDexFile, pDexMethod->methodIdx, &methInfo);
-    startAddr = ((u1*)pCode - pDexFile->baseAddr);
+  getMethodInfo(pDexFile, pDexMethod->methodIdx, &methInfo);
+  startAddr = ((u1 *)pCode - pDexFile->baseAddr);
 
-	// Modified Tool
-	std::string startAddrStr;
-	{
-		std::stringstream stream;
-		stream << std::hex << startAddr;
-		startAddrStr = stream.str();
-	}
-	TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename, std::string(4, ' ') + "|" + startAddrStr + "|");
+  // Modified Tool
+  std::string startAddrStr;
+  {
+    std::stringstream stream;
+    stream << std::hex << startAddr;
+    startAddrStr = stream.str();
+  }
+  TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename,
+                                 std::string(4, ' ') + "|" + startAddrStr +
+                                     "|");
 
-    className = descriptorToDot(methInfo.classDescriptor);
+  className = descriptorToDot(methInfo.classDescriptor);
 
-    printf("%06x:                                        |[%06x] %s.%s:%s\n",
-        startAddr, startAddr,
-        className, methInfo.name, methInfo.signature);
+  printf("%06x:                                        |[%06x] %s.%s:%s\n",
+         startAddr, startAddr, className, methInfo.name, methInfo.signature);
 
-    insnIdx = 0;
-	TreeConstructor::Node method_tree;
-    while (insnIdx < (int) pCode->insnsSize) {
-        int insnWidth;
-        OpCode opCode;
-        DecodedInstruction decInsn;
-        u2 instr;
+  insnIdx = 0;
+  TreeConstructor::Node method_tree;
+  while (insnIdx < (int)pCode->insnsSize) {
+    int insnWidth;
+    OpCode opCode;
+    DecodedInstruction decInsn;
+    u2 instr;
 
-        instr = get2LE((const u1*)insns);
-        if (instr == kPackedSwitchSignature) {
-            insnWidth = 4 + get2LE((const u1*)(insns+1)) * 2;
-        } else if (instr == kSparseSwitchSignature) {
-            insnWidth = 2 + get2LE((const u1*)(insns+1)) * 4;
-        } else if (instr == kArrayDataSignature) {
-            int width = get2LE((const u1*)(insns+1));
-            int size = get2LE((const u1*)(insns+2)) | 
-                       (get2LE((const u1*)(insns+3))<<16);
-            // The plus 1 is to round up for odd size and width 
-            insnWidth = 4 + ((size * width) + 1) / 2;
-        } else {
-            opCode = (OpCode)(instr & 0xff);
-            insnWidth = dexGetInstrWidthAbs(gInstrWidth, opCode);
-            if (insnWidth == 0) {
-                fprintf(stderr,
-                    "GLITCH: zero-width instruction at idx=0x%04x\n", insnIdx);
-                break;
-            }
-        }
-
-        dexDecodeInstruction(gInstrFormat, insns, &decInsn);
-        auto instr_node = dumpInstruction(pDexFile, pCode, insnIdx, insnWidth, &decInsn);
-
-		TreeConstructor::append_node_to(method_tree,instr_node);
-
-        insns += insnWidth;
-        insnIdx += insnWidth;
+    instr = get2LE((const u1 *)insns);
+    if (instr == kPackedSwitchSignature) {
+      insnWidth = 4 + get2LE((const u1 *)(insns + 1)) * 2;
+    } else if (instr == kSparseSwitchSignature) {
+      insnWidth = 2 + get2LE((const u1 *)(insns + 1)) * 4;
+    } else if (instr == kArrayDataSignature) {
+      int width = get2LE((const u1 *)(insns + 1));
+      int size = get2LE((const u1 *)(insns + 2)) |
+                 (get2LE((const u1 *)(insns + 3)) << 16);
+      // The plus 1 is to round up for odd size and width
+      insnWidth = 4 + ((size * width) + 1) / 2;
+    } else {
+      opCode = (OpCode)(instr & 0xff);
+      insnWidth = dexGetInstrWidthAbs(gInstrWidth, opCode);
+      if (insnWidth == 0) {
+        fprintf(stderr, "GLITCH: zero-width instruction at idx=0x%04x\n",
+                insnIdx);
+        break;
+      }
     }
-	method_tree.pretty_print();
-	method_tree.dot_fmt_dump();
 
-    free(className);
+    dexDecodeInstruction(gInstrFormat, insns, &decInsn);
+    auto instr_node =
+        dumpInstruction(pDexFile, pCode, insnIdx, insnWidth, &decInsn);
+
+    TreeConstructor::append_node_to(method_tree, instr_node);
+
+    insns += insnWidth;
+    insnIdx += insnWidth;
+  }
+  method_tree.pretty_print();
+  method_tree.dot_fmt_dump();
+
+  free(className);
 }
 
 /*
  * Dump a "code" struct.
  */
-void dumpCode(DexFile* pDexFile, const DexMethod* pDexMethod)
-{
-    const DexCode* pCode = dexGetCode(pDexFile, pDexMethod);
+void dumpCode(DexFile *pDexFile, const DexMethod *pDexMethod) {
+  const DexCode *pCode = dexGetCode(pDexFile, pDexMethod);
 
-    printf("      registers     : %d\n", pCode->registersSize);
-    printf("      ins           : %d\n", pCode->insSize);
-    printf("      outs          : %d\n", pCode->outsSize);
-    printf("      insns size    : %d 16-bit code units\n", pCode->insnsSize);
+  printf("      registers     : %d\n", pCode->registersSize);
+  printf("      ins           : %d\n", pCode->insSize);
+  printf("      outs          : %d\n", pCode->outsSize);
+  printf("      insns size    : %d 16-bit code units\n", pCode->insnsSize);
 
-    if (gOptions.disassemble)
-        dumpBytecodes(pDexFile, pDexMethod);
-/* NOCOMMIT
-    dumpCatches(pDexFile, pCode);
-*/
-    /* both of these are encoded in debug info */
-/* NOCOMMIT
-    dumpPositions(pDexFile, pCode, pDexMethod);
-    dumpLocals(pDexFile, pCode, pDexMethod);
-*/
+  if (gOptions.disassemble)
+    dumpBytecodes(pDexFile, pDexMethod);
+  /* NOCOMMIT
+      dumpCatches(pDexFile, pCode);
+  */
+  /* both of these are encoded in debug info */
+  /* NOCOMMIT
+      dumpPositions(pDexFile, pCode, pDexMethod);
+      dumpLocals(pDexFile, pCode, pDexMethod);
+  */
 }
 
 /*
  * Dump a method.
  */
-void dumpMethod(DexFile* pDexFile, const DexMethod* pDexMethod, int i, std::string const& class_name)
-{
-    const DexMethodId* pMethodId;
-    const char* backDescriptor;
-    const char* name;
-    char* typeDescriptor = NULL;
-    char* accessStr = NULL;
+void dumpMethod(DexFile *pDexFile, const DexMethod *pDexMethod, int i,
+                std::string const &class_name) {
+  const DexMethodId *pMethodId;
+  const char *backDescriptor;
+  const char *name;
+  char *typeDescriptor = NULL;
+  char *accessStr = NULL;
 
-    if (gOptions.exportsOnly &&
-        (pDexMethod->accessFlags & (ACC_PUBLIC | ACC_PROTECTED)) == 0)
-    {
-        return;
+  if (gOptions.exportsOnly &&
+      (pDexMethod->accessFlags & (ACC_PUBLIC | ACC_PROTECTED)) == 0) {
+    return;
+  }
+
+  pMethodId = dexGetMethodId(pDexFile, pDexMethod->methodIdx);
+  name = dexStringById(pDexFile, pMethodId->nameIdx);
+  typeDescriptor = dexCopyDescriptorFromMethodId(pDexFile, pMethodId);
+
+  backDescriptor = dexStringByTypeIdx(pDexFile, pMethodId->classIdx);
+
+  accessStr = createAccessFlagStr(pDexMethod->accessFlags, kAccessForMethod);
+
+  if (gOptions.outputFormat == OUTPUT_PLAIN) {
+    printf("    #%d              : (in %s)\n", i, backDescriptor);
+    printf("      name          : '%s'\n", name);
+
+    // Modified Tool
+    TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename,
+                                   std::string(4, ' ') + std::string(name));
+
+    // NOCOMMIT printf("      type          : '%s'\n", typeDescriptor);
+    // NOCOMMIT printf("      access        : 0x%04x (%s)\n",
+    // NOCOMMIT     pDexMethod->accessFlags, accessStr);
+
+    if (pDexMethod->codeOff == 0) {
+      printf("      code          : (none)\n");
+    } else {
+      printf("      code          -\n");
+      dumpCode(pDexFile, pDexMethod);
     }
 
-    pMethodId = dexGetMethodId(pDexFile, pDexMethod->methodIdx);
-    name = dexStringById(pDexFile, pMethodId->nameIdx);
-    typeDescriptor = dexCopyDescriptorFromMethodId(pDexFile, pMethodId);
+    if (gOptions.disassemble)
+      putchar('\n');
 
-    backDescriptor = dexStringByTypeIdx(pDexFile, pMethodId->classIdx);
+    // Modified Tool
+    TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename,
+                                   std::string(4, ' ') + std::string(20, '-'));
+  } else if (gOptions.outputFormat == OUTPUT_XML) {
+    bool constructor = (name[0] == '<');
 
-    accessStr = createAccessFlagStr(pDexMethod->accessFlags,
-                    kAccessForMethod);
+    if (constructor) {
+      char *tmp;
 
-    if (gOptions.outputFormat == OUTPUT_PLAIN) {
-        printf("    #%d              : (in %s)\n", i, backDescriptor);
-        printf("      name          : '%s'\n", name);
+      tmp = descriptorClassToDot(backDescriptor);
+      printf("<constructor name=\"%s\"\n", tmp);
+      free(tmp);
 
-		// Modified Tool
-		TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename, std::string(4, ' ') + std::string(name));
+      tmp = descriptorToDot(backDescriptor);
+      printf(" type=\"%s\"\n", tmp);
+      free(tmp);
+    } else {
+      printf("<method name=\"%s\"\n", name);
 
-        // NOCOMMIT printf("      type          : '%s'\n", typeDescriptor);
-        // NOCOMMIT printf("      access        : 0x%04x (%s)\n",
-        // NOCOMMIT     pDexMethod->accessFlags, accessStr);
+      const char *returnType = strrchr(typeDescriptor, ')');
+      if (returnType == NULL) {
+        fprintf(stderr, "bad method type descriptor '%s'\n", typeDescriptor);
+        goto bail;
+      }
 
-        if (pDexMethod->codeOff == 0) {
-            printf("      code          : (none)\n");
-        } else {
-            printf("      code          -\n");
-            dumpCode(pDexFile, pDexMethod);
-        }
+      char *tmp = descriptorToDot(returnType + 1);
+      printf(" return=\"%s\"\n", tmp);
+      free(tmp);
 
-        if (gOptions.disassemble)
-            putchar('\n');
+      printf(" abstract=%s\n",
+             quotedBool((pDexMethod->accessFlags & ACC_ABSTRACT) != 0));
+      printf(" native=%s\n",
+             quotedBool((pDexMethod->accessFlags & ACC_NATIVE) != 0));
 
-		// Modified Tool
-		TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename, std::string(4, ' ') + std::string(20, '-'));
-    } else if (gOptions.outputFormat == OUTPUT_XML) {
-        bool constructor = (name[0] == '<');
-
-        if (constructor) {
-            char* tmp;
-
-            tmp = descriptorClassToDot(backDescriptor);
-            printf("<constructor name=\"%s\"\n", tmp);
-            free(tmp);
-
-            tmp = descriptorToDot(backDescriptor);
-            printf(" type=\"%s\"\n", tmp);
-            free(tmp);
-        } else {
-            printf("<method name=\"%s\"\n", name);
-
-            const char* returnType = strrchr(typeDescriptor, ')');
-            if (returnType == NULL) {
-                fprintf(stderr, "bad method type descriptor '%s'\n",
-                    typeDescriptor);
-                goto bail;
-            }
-
-            char* tmp = descriptorToDot(returnType+1);
-            printf(" return=\"%s\"\n", tmp);
-            free(tmp);
-
-            printf(" abstract=%s\n",
-                quotedBool((pDexMethod->accessFlags & ACC_ABSTRACT) != 0));
-            printf(" native=%s\n",
-                quotedBool((pDexMethod->accessFlags & ACC_NATIVE) != 0));
-
-            bool isSync =
-                (pDexMethod->accessFlags & ACC_SYNCHRONIZED) != 0 ||
-                (pDexMethod->accessFlags & ACC_DECLARED_SYNCHRONIZED) != 0;
-            printf(" synchronized=%s\n", quotedBool(isSync));
-        }
-
-        printf(" static=%s\n",
-            quotedBool((pDexMethod->accessFlags & ACC_STATIC) != 0));
-        printf(" final=%s\n",
-            quotedBool((pDexMethod->accessFlags & ACC_FINAL) != 0));
-        // "deprecated=" not knowable w/o parsing annotations
-        // NOCOMMIT printf(" visibility=%s\n",
-        // NOCOMMIT    quotedVisibility(pDexMethod->accessFlags));
-
-        printf(">\n");
-
-        /*
-         * Parameters.
-         */
-        if (typeDescriptor[0] != '(') {
-            fprintf(stderr, "ERROR: bad descriptor '%s'\n", typeDescriptor);
-            goto bail;
-        }
-
-        char* tmpBuf = (char*)malloc(strlen(typeDescriptor)+1);      /* more than big enough */
-        int argNum = 0;
-
-        const char* base = typeDescriptor+1;
-
-        while (*base != ')') {
-            char* cp = tmpBuf;
-
-            while (*base == '[')
-                *cp++ = *base++;
-
-            if (*base == 'L') {
-                /* copy through ';' */
-                do {
-                    *cp = *base++;
-                } while (*cp++ != ';');
-            } else {
-                /* primitive char, copy it */
-                if (strchr("ZBCSIFJD", *base) == NULL) {
-                    fprintf(stderr, "ERROR: bad method signature '%s'\n", base);
-                    goto bail;
-                }
-                *cp++ = *base++;
-            }
-
-            /* null terminate and display */
-            *cp++ = '\0';
-
-            char* tmp = descriptorToDot(tmpBuf);
-            printf("<parameter name=\"arg%d\" type=\"%s\">\n</parameter>\n",
-                argNum++, tmp);
-            free(tmp);
-			free(tmpBuf);
-        }
-
-        if (constructor)
-            printf("</constructor>\n");
-        else
-            printf("</method>\n");
-
+      bool isSync = (pDexMethod->accessFlags & ACC_SYNCHRONIZED) != 0 ||
+                    (pDexMethod->accessFlags & ACC_DECLARED_SYNCHRONIZED) != 0;
+      printf(" synchronized=%s\n", quotedBool(isSync));
     }
+
+    printf(" static=%s\n",
+           quotedBool((pDexMethod->accessFlags & ACC_STATIC) != 0));
+    printf(" final=%s\n",
+           quotedBool((pDexMethod->accessFlags & ACC_FINAL) != 0));
+    // "deprecated=" not knowable w/o parsing annotations
+    // NOCOMMIT printf(" visibility=%s\n",
+    // NOCOMMIT    quotedVisibility(pDexMethod->accessFlags));
+
+    printf(">\n");
+
+    /*
+     * Parameters.
+     */
+    if (typeDescriptor[0] != '(') {
+      fprintf(stderr, "ERROR: bad descriptor '%s'\n", typeDescriptor);
+      goto bail;
+    }
+
+    char *tmpBuf =
+        (char *)malloc(strlen(typeDescriptor) + 1); /* more than big enough */
+    int argNum = 0;
+
+    const char *base = typeDescriptor + 1;
+
+    while (*base != ')') {
+      char *cp = tmpBuf;
+
+      while (*base == '[')
+        *cp++ = *base++;
+
+      if (*base == 'L') {
+        /* copy through ';' */
+        do {
+          *cp = *base++;
+        } while (*cp++ != ';');
+      } else {
+        /* primitive char, copy it */
+        if (strchr("ZBCSIFJD", *base) == NULL) {
+          fprintf(stderr, "ERROR: bad method signature '%s'\n", base);
+          goto bail;
+        }
+        *cp++ = *base++;
+      }
+
+      /* null terminate and display */
+      *cp++ = '\0';
+
+      char *tmp = descriptorToDot(tmpBuf);
+      printf("<parameter name=\"arg%d\" type=\"%s\">\n</parameter>\n", argNum++,
+             tmp);
+      free(tmp);
+      free(tmpBuf);
+    }
+
+    if (constructor)
+      printf("</constructor>\n");
+    else
+      printf("</method>\n");
+  }
 
 bail:
-    free(typeDescriptor);
-    free(accessStr);
+  free(typeDescriptor);
+  free(accessStr);
 }
 
 /*
  * Dump a static (class) field.
  */
-void dumpSField(const DexFile* pDexFile, const DexField* pSField, int i)
-{
-    const DexFieldId* pFieldId;
-    const char* backDescriptor;
-    const char* name;
-    const char* typeDescriptor;
-    char* accessStr;
+void dumpSField(const DexFile *pDexFile, const DexField *pSField, int i) {
+  const DexFieldId *pFieldId;
+  const char *backDescriptor;
+  const char *name;
+  const char *typeDescriptor;
+  char *accessStr;
 
-    if (gOptions.exportsOnly &&
-        (pSField->accessFlags & (ACC_PUBLIC | ACC_PROTECTED)) == 0)
-    {
-        return;
-    }
+  if (gOptions.exportsOnly &&
+      (pSField->accessFlags & (ACC_PUBLIC | ACC_PROTECTED)) == 0) {
+    return;
+  }
 
-    pFieldId = dexGetFieldId(pDexFile, pSField->fieldIdx);
-    name = dexStringById(pDexFile, pFieldId->nameIdx);
-    typeDescriptor = dexStringByTypeIdx(pDexFile, pFieldId->typeIdx);
-    backDescriptor = dexStringByTypeIdx(pDexFile, pFieldId->classIdx);
+  pFieldId = dexGetFieldId(pDexFile, pSField->fieldIdx);
+  name = dexStringById(pDexFile, pFieldId->nameIdx);
+  typeDescriptor = dexStringByTypeIdx(pDexFile, pFieldId->typeIdx);
+  backDescriptor = dexStringByTypeIdx(pDexFile, pFieldId->classIdx);
 
-    accessStr = createAccessFlagStr(pSField->accessFlags, kAccessForField);
+  accessStr = createAccessFlagStr(pSField->accessFlags, kAccessForField);
 
-    if (gOptions.outputFormat == OUTPUT_PLAIN) {
-        printf("    #%d              : (in %s)\n", i, backDescriptor);
-        printf("      name          : '%s'\n", name);
-        printf("      type          : '%s'\n", typeDescriptor);
-        printf("      access        : 0x%04x (%s)\n",
-            pSField->accessFlags, accessStr);
-    } else if (gOptions.outputFormat == OUTPUT_XML) {
-        char* tmp;
+  if (gOptions.outputFormat == OUTPUT_PLAIN) {
+    printf("    #%d              : (in %s)\n", i, backDescriptor);
+    printf("      name          : '%s'\n", name);
+    printf("      type          : '%s'\n", typeDescriptor);
+    printf("      access        : 0x%04x (%s)\n", pSField->accessFlags,
+           accessStr);
+  } else if (gOptions.outputFormat == OUTPUT_XML) {
+    char *tmp;
 
-        printf("<field name=\"%s\"\n", name);
+    printf("<field name=\"%s\"\n", name);
 
-        tmp = descriptorToDot(typeDescriptor);
-        printf(" type=\"%s\"\n", tmp);
-        free(tmp);
+    tmp = descriptorToDot(typeDescriptor);
+    printf(" type=\"%s\"\n", tmp);
+    free(tmp);
 
-        printf(" transient=%s\n",
-            quotedBool((pSField->accessFlags & ACC_TRANSIENT) != 0));
-        printf(" volatile=%s\n",
-            quotedBool((pSField->accessFlags & ACC_VOLATILE) != 0));
-        // "value=" not knowable w/o parsing annotations
-        printf(" static=%s\n",
-            quotedBool((pSField->accessFlags & ACC_STATIC) != 0));
-        printf(" final=%s\n",
-            quotedBool((pSField->accessFlags & ACC_FINAL) != 0));
-        // "deprecated=" not knowable w/o parsing annotations
-        printf(" visibility=%s\n",
-            quotedVisibility(pSField->accessFlags));
-        printf(">\n</field>\n");
-    }
+    printf(" transient=%s\n",
+           quotedBool((pSField->accessFlags & ACC_TRANSIENT) != 0));
+    printf(" volatile=%s\n",
+           quotedBool((pSField->accessFlags & ACC_VOLATILE) != 0));
+    // "value=" not knowable w/o parsing annotations
+    printf(" static=%s\n",
+           quotedBool((pSField->accessFlags & ACC_STATIC) != 0));
+    printf(" final=%s\n", quotedBool((pSField->accessFlags & ACC_FINAL) != 0));
+    // "deprecated=" not knowable w/o parsing annotations
+    printf(" visibility=%s\n", quotedVisibility(pSField->accessFlags));
+    printf(">\n</field>\n");
+  }
 
-    free(accessStr);
+  free(accessStr);
 }
 
 /*
  * Dump an instance field.
  */
-void dumpIField(const DexFile* pDexFile, const DexField* pIField, int i)
-{
-    dumpSField(pDexFile, pIField, i);
+void dumpIField(const DexFile *pDexFile, const DexField *pIField, int i) {
+  dumpSField(pDexFile, pIField, i);
 }
 
 /*
@@ -1539,195 +1470,192 @@ void dumpIField(const DexFile* pDexFile, const DexField* pIField, int i)
  * If "*pLastPackage" is NULL or does not match the current class' package,
  * the value will be replaced with a newly-allocated string.
  */
-void dumpClass(DexFile* pDexFile, int idx, char** pLastPackage)
-{
-    const DexTypeList* pInterfaces;
-    const DexClassDef* pClassDef;
-    DexClassData* pClassData = NULL;
-    const u1* pEncodedData;
-    const char* fileName;
-    const char* classDescriptor;
-    const char* superclassDescriptor;
-    char* accessStr = NULL;
-    int i;
+void dumpClass(DexFile *pDexFile, int idx, char **pLastPackage) {
+  const DexTypeList *pInterfaces;
+  const DexClassDef *pClassDef;
+  DexClassData *pClassData = NULL;
+  const u1 *pEncodedData;
+  const char *fileName;
+  const char *classDescriptor;
+  const char *superclassDescriptor;
+  char *accessStr = NULL;
+  int i;
 
-    pClassDef = dexGetClassDef(pDexFile, idx);
+  pClassDef = dexGetClassDef(pDexFile, idx);
 
-    if (gOptions.exportsOnly && (pClassDef->accessFlags & ACC_PUBLIC) == 0) {
-        //printf("<!-- omitting non-public class %s -->\n",
-        //    classDescriptor);
-		free(pClassData);
-		free(accessStr);
-		return;
-    }
+  if (gOptions.exportsOnly && (pClassDef->accessFlags & ACC_PUBLIC) == 0) {
+    // printf("<!-- omitting non-public class %s -->\n",
+    //    classDescriptor);
+    free(pClassData);
+    free(accessStr);
+    return;
+  }
 
-    pEncodedData = dexGetClassData(pDexFile, pClassDef);
-    pClassData = dexReadAndVerifyClassData(&pEncodedData, NULL);
+  pEncodedData = dexGetClassData(pDexFile, pClassDef);
+  pClassData = dexReadAndVerifyClassData(&pEncodedData, NULL);
 
-    if (pClassData == NULL) {
-        printf("Trouble reading class data (#%d)\n", idx);
-		free(pClassData);
-		free(accessStr);
-		return;
-    }
-    
-    classDescriptor = dexStringByTypeIdx(pDexFile, pClassDef->classIdx);
+  if (pClassData == NULL) {
+    printf("Trouble reading class data (#%d)\n", idx);
+    free(pClassData);
+    free(accessStr);
+    return;
+  }
 
-	// Modified Tool
-	auto class_name = std::string(classDescriptor);
-	class_name.pop_back();
-	TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename, class_name);
+  classDescriptor = dexStringByTypeIdx(pDexFile, pClassDef->classIdx);
 
-    /*
-     * For the XML output, show the package name.  Ideally we'd gather
-     * up the classes, sort them, and dump them alphabetically so the
-     * package name wouldn't jump around, but that's not a great plan
-     * for something that needs to run on the device.
-     */
-    if (!(classDescriptor[0] == 'L' &&
-          classDescriptor[strlen(classDescriptor)-1] == ';'))
-    {
-        /* arrays and primitives should not be defined explicitly */
-        fprintf(stderr, "Malformed class name '%s'\n", classDescriptor);
-        /* keep going? */
-    } else if (gOptions.outputFormat == OUTPUT_XML) {
-        char* mangle;
-        char* lastSlash;
-        char* cp;
+  // Modified Tool
+  auto class_name = std::string(classDescriptor);
+  class_name.pop_back();
+  TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename,
+                                 class_name);
 
-        mangle = strdup(classDescriptor + 1);
-        mangle[strlen(mangle)-1] = '\0';
+  /*
+   * For the XML output, show the package name.  Ideally we'd gather
+   * up the classes, sort them, and dump them alphabetically so the
+   * package name wouldn't jump around, but that's not a great plan
+   * for something that needs to run on the device.
+   */
+  if (!(classDescriptor[0] == 'L' &&
+        classDescriptor[strlen(classDescriptor) - 1] == ';')) {
+    /* arrays and primitives should not be defined explicitly */
+    fprintf(stderr, "Malformed class name '%s'\n", classDescriptor);
+    /* keep going? */
+  } else if (gOptions.outputFormat == OUTPUT_XML) {
+    char *mangle;
+    char *lastSlash;
+    char *cp;
 
-        /* reduce to just the package name */
-        lastSlash = strrchr(mangle, '/');
-        if (lastSlash != NULL) {
-            *lastSlash = '\0';
-        } else {
-            *mangle = '\0';
-        }
+    mangle = strdup(classDescriptor + 1);
+    mangle[strlen(mangle) - 1] = '\0';
 
-        for (cp = mangle; *cp != '\0'; cp++) {
-            if (*cp == '/')
-                *cp = '.';
-        }
-
-        if (*pLastPackage == NULL || strcmp(mangle, *pLastPackage) != 0) {
-            /* start of a new package */
-            if (*pLastPackage != NULL)
-                printf("</package>\n");
-            printf("<package name=\"%s\"\n>\n", mangle);
-            free(*pLastPackage);
-            *pLastPackage = mangle;
-        } else {
-            free(mangle);
-        }
-    }
-
-    accessStr = createAccessFlagStr(pClassDef->accessFlags, kAccessForClass);
-
-    if (pClassDef->superclassIdx == kDexNoIndex) {
-        superclassDescriptor = NULL;
+    /* reduce to just the package name */
+    lastSlash = strrchr(mangle, '/');
+    if (lastSlash != NULL) {
+      *lastSlash = '\0';
     } else {
-        superclassDescriptor =
-            dexStringByTypeIdx(pDexFile, pClassDef->superclassIdx);
+      *mangle = '\0';
     }
 
-    if (gOptions.outputFormat == OUTPUT_PLAIN) {
-        printf("Class #%d            -\n", idx);
-        printf("  Class descriptor  : '%s'\n", classDescriptor);
-        // NOCOMMIT printf("  Access flags      : 0x%04x (%s)\n",
-        // NOCOMMIT    pClassDef->accessFlags, accessStr);
+    for (cp = mangle; *cp != '\0'; cp++) {
+      if (*cp == '/')
+        *cp = '.';
+    }
 
-        // NOCOMMIT if (superclassDescriptor != NULL)
-        // NOCOMMIT     printf("  Superclass        : '%s'\n", superclassDescriptor);
-
-        // NOCOMMIT printf("  Interfaces        -\n");
+    if (*pLastPackage == NULL || strcmp(mangle, *pLastPackage) != 0) {
+      /* start of a new package */
+      if (*pLastPackage != NULL)
+        printf("</package>\n");
+      printf("<package name=\"%s\"\n>\n", mangle);
+      free(*pLastPackage);
+      *pLastPackage = mangle;
     } else {
-        char* tmp;
-
-        tmp = descriptorClassToDot(classDescriptor);
-        printf("<class name=\"%s\"\n", tmp);
-        free(tmp);
-/* NOCOMMIT
-        if (superclassDescriptor != NULL) {
-            tmp = descriptorToDot(superclassDescriptor);
-            printf(" extends=\"%s\"\n", tmp);
-            free(tmp);
-        }
-
-        printf(" abstract=%s\n",
-            quotedBool((pClassDef->accessFlags & ACC_ABSTRACT) != 0));
-        printf(" static=%s\n",
-            quotedBool((pClassDef->accessFlags & ACC_STATIC) != 0));
-        printf(" final=%s\n",
-            quotedBool((pClassDef->accessFlags & ACC_FINAL) != 0));
-        // "deprecated=" not knowable w/o parsing annotations
-        printf(" visibility=%s\n",
-            quotedVisibility(pClassDef->accessFlags));
-*/
-        printf(">\n");
+      free(mangle);
     }
-    pInterfaces = dexGetInterfacesList(pDexFile, pClassDef);
-/* NOCOMMIT
-    if (pInterfaces != NULL) {
-        for (i = 0; i < (int) pInterfaces->size; i++)
-            dumpInterface(pDexFile, dexGetTypeItem(pInterfaces, i), i);
-    }
+  }
 
-    if (gOptions.outputFormat == OUTPUT_PLAIN)
-        printf("  Static fields     -\n");
-    for (i = 0; i < (int) pClassData->header.staticFieldsSize; i++) {
-        dumpSField(pDexFile, &pClassData->staticFields[i], i);
-    }
+  accessStr = createAccessFlagStr(pClassDef->accessFlags, kAccessForClass);
 
-    if (gOptions.outputFormat == OUTPUT_PLAIN)
-        printf("  Instance fields   -\n");
-    for (i = 0; i < (int) pClassData->header.instanceFieldsSize; i++) {
-        dumpIField(pDexFile, &pClassData->instanceFields[i], i);
-    }
-*/
-    if (gOptions.outputFormat == OUTPUT_PLAIN)
-        printf("  Direct methods    -\n");
-    for (i = 0; i < (int) pClassData->header.directMethodsSize; i++) {
-        dumpMethod(pDexFile, &pClassData->directMethods[i], i, class_name);
-    }
+  if (pClassDef->superclassIdx == kDexNoIndex) {
+    superclassDescriptor = NULL;
+  } else {
+    superclassDescriptor =
+        dexStringByTypeIdx(pDexFile, pClassDef->superclassIdx);
+  }
 
-    if (gOptions.outputFormat == OUTPUT_PLAIN)
-        printf("  Virtual methods   -\n");
-    for (i = 0; i < (int) pClassData->header.virtualMethodsSize; i++) {
-        dumpMethod(pDexFile, &pClassData->virtualMethods[i], i, class_name);
-    }
+  if (gOptions.outputFormat == OUTPUT_PLAIN) {
+    printf("Class #%d            -\n", idx);
+    printf("  Class descriptor  : '%s'\n", classDescriptor);
+    // NOCOMMIT printf("  Access flags      : 0x%04x (%s)\n",
+    // NOCOMMIT    pClassDef->accessFlags, accessStr);
 
-    // TODO: Annotations.
+    // NOCOMMIT if (superclassDescriptor != NULL)
+    // NOCOMMIT     printf("  Superclass        : '%s'\n",
+    // superclassDescriptor);
 
-    if (pClassDef->sourceFileIdx != kDexNoIndex)
-        fileName = dexStringById(pDexFile, pClassDef->sourceFileIdx);
-    else
-        fileName = "unknown";
+    // NOCOMMIT printf("  Interfaces        -\n");
+  } else {
+    char *tmp;
 
-    if (gOptions.outputFormat == OUTPUT_PLAIN) {
-        printf("  source_file_idx   : %d (%s)\n",
-            pClassDef->sourceFileIdx, fileName);
-        printf("\n");
-    }
+    tmp = descriptorClassToDot(classDescriptor);
+    printf("<class name=\"%s\"\n", tmp);
+    free(tmp);
+    /* NOCOMMIT
+            if (superclassDescriptor != NULL) {
+                tmp = descriptorToDot(superclassDescriptor);
+                printf(" extends=\"%s\"\n", tmp);
+                free(tmp);
+            }
 
-    if (gOptions.outputFormat == OUTPUT_XML) {
-        printf("</class>\n");
-    }
+            printf(" abstract=%s\n",
+                quotedBool((pClassDef->accessFlags & ACC_ABSTRACT) != 0));
+            printf(" static=%s\n",
+                quotedBool((pClassDef->accessFlags & ACC_STATIC) != 0));
+            printf(" final=%s\n",
+                quotedBool((pClassDef->accessFlags & ACC_FINAL) != 0));
+            // "deprecated=" not knowable w/o parsing annotations
+            printf(" visibility=%s\n",
+                quotedVisibility(pClassDef->accessFlags));
+    */
+    printf(">\n");
+  }
+  pInterfaces = dexGetInterfacesList(pDexFile, pClassDef);
+  /* NOCOMMIT
+      if (pInterfaces != NULL) {
+          for (i = 0; i < (int) pInterfaces->size; i++)
+              dumpInterface(pDexFile, dexGetTypeItem(pInterfaces, i), i);
+      }
 
-	TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename, std::string(80, '='));
+      if (gOptions.outputFormat == OUTPUT_PLAIN)
+          printf("  Static fields     -\n");
+      for (i = 0; i < (int) pClassData->header.staticFieldsSize; i++) {
+          dumpSField(pDexFile, &pClassData->staticFields[i], i);
+      }
 
+      if (gOptions.outputFormat == OUTPUT_PLAIN)
+          printf("  Instance fields   -\n");
+      for (i = 0; i < (int) pClassData->header.instanceFieldsSize; i++) {
+          dumpIField(pDexFile, &pClassData->instanceFields[i], i);
+      }
+  */
+  if (gOptions.outputFormat == OUTPUT_PLAIN)
+    printf("  Direct methods    -\n");
+  for (i = 0; i < (int)pClassData->header.directMethodsSize; i++) {
+    dumpMethod(pDexFile, &pClassData->directMethods[i], i, class_name);
+  }
+
+  if (gOptions.outputFormat == OUTPUT_PLAIN)
+    printf("  Virtual methods   -\n");
+  for (i = 0; i < (int)pClassData->header.virtualMethodsSize; i++) {
+    dumpMethod(pDexFile, &pClassData->virtualMethods[i], i, class_name);
+  }
+
+  // TODO: Annotations.
+
+  if (pClassDef->sourceFileIdx != kDexNoIndex)
+    fileName = dexStringById(pDexFile, pClassDef->sourceFileIdx);
+  else
+    fileName = "unknown";
+
+  if (gOptions.outputFormat == OUTPUT_PLAIN) {
+    printf("  source_file_idx   : %d (%s)\n", pClassDef->sourceFileIdx,
+           fileName);
+    printf("\n");
+  }
+
+  if (gOptions.outputFormat == OUTPUT_XML) {
+    printf("</class>\n");
+  }
+
+  TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename,
+                                 std::string(80, '='));
 }
-
 
 /*
  * Advance "ptr" to ensure 32-bit alignment.
  */
-static inline const u1* align32(const u1* ptr)
-{
-    return (u1*) (((int) ptr + 3) & ~0x03);
+static inline const u1 *align32(const u1 *ptr) {
+  return (u1 *)(((int)ptr + 3) & ~0x03);
 }
-
 
 /*
  * Dump a map in the "differential" format.
@@ -1736,35 +1664,33 @@ static inline const u1* align32(const u1* ptr)
  * uncompressed data if we move the compression code to libdex; otherwise
  * it's too complex to merit a fast & fragile implementation here.)
  */
-void dumpDifferentialCompressedMap(const u1** pData)
-{
-    const u1* data = *pData;
-    const u1* dataStart = data -1;      // format byte already removed
-    u1 regWidth;
-    u2 numEntries;
+void dumpDifferentialCompressedMap(const u1 **pData) {
+  const u1 *data = *pData;
+  const u1 *dataStart = data - 1; // format byte already removed
+  u1 regWidth;
+  u2 numEntries;
 
-    /* standard header */
-    regWidth = *data++;
-    numEntries = *data++;
-    numEntries |= (*data++) << 8;
+  /* standard header */
+  regWidth = *data++;
+  numEntries = *data++;
+  numEntries |= (*data++) << 8;
 
-    /* compressed data begins with the compressed data length */
-    int compressedLen = readUnsignedLeb128(&data);
-    int addrWidth = 1;
-    if ((*data & 0x80) != 0)
-        addrWidth++;
+  /* compressed data begins with the compressed data length */
+  int compressedLen = readUnsignedLeb128(&data);
+  int addrWidth = 1;
+  if ((*data & 0x80) != 0)
+    addrWidth++;
 
-    int origLen = 4 + (addrWidth + regWidth) * numEntries;
-    int compLen = (data - dataStart) + compressedLen;
+  int origLen = 4 + (addrWidth + regWidth) * numEntries;
+  int compLen = (data - dataStart) + compressedLen;
 
-    printf("        (differential compression %d -> %d [%d -> %d])\n",
-        origLen, compLen,
-        (addrWidth + regWidth) * numEntries, compressedLen);
+  printf("        (differential compression %d -> %d [%d -> %d])\n", origLen,
+         compLen, (addrWidth + regWidth) * numEntries, compressedLen);
 
-    /* skip past end of entry */
-    data += compressedLen;
+  /* skip past end of entry */
+  data += compressedLen;
 
-    *pData = data;
+  *pData = data;
 }
 
 /*
@@ -1773,65 +1699,64 @@ void dumpDifferentialCompressedMap(const u1** pData)
  * "*pData" should point to the start of the register map data.  Advances
  * "*pData" to the start of the next map.
  */
-void dumpMethodMap(DexFile* pDexFile, const DexMethod* pDexMethod, int idx,
-    const u1** pData)
-{
-    const u1* data = *pData;
-    const DexMethodId* pMethodId;
-    const char* name;
-    int offset = data - (u1*) pDexFile->pOptHeader;
+void dumpMethodMap(DexFile *pDexFile, const DexMethod *pDexMethod, int idx,
+                   const u1 **pData) {
+  const u1 *data = *pData;
+  const DexMethodId *pMethodId;
+  const char *name;
+  int offset = data - (u1 *)pDexFile->pOptHeader;
 
-    pMethodId = dexGetMethodId(pDexFile, pDexMethod->methodIdx);
-    name = dexStringById(pDexFile, pMethodId->nameIdx);
-    printf("      #%d: 0x%08x %s\n", idx, offset, name);
+  pMethodId = dexGetMethodId(pDexFile, pDexMethod->methodIdx);
+  name = dexStringById(pDexFile, pMethodId->nameIdx);
+  printf("      #%d: 0x%08x %s\n", idx, offset, name);
 
-    u1 format;
-    int addrWidth;
+  u1 format;
+  int addrWidth;
 
-    format = *data++;
-    if (format == 1) {              /* kRegMapFormatNone */
-        /* no map */
-        printf("        (no map)\n");
-        addrWidth = 0;
-    } else if (format == 2) {       /* kRegMapFormatCompact8 */
-        addrWidth = 1;
-    } else if (format == 3) {       /* kRegMapFormatCompact16 */
-        addrWidth = 2;
-    } else if (format == 4) {       /* kRegMapFormatDifferential */
-        dumpDifferentialCompressedMap(&data);
-        goto bail;
-    } else {
-        printf("        (unknown format %d!)\n", format);
-        /* don't know how to skip data; failure will cascade to end of class */
-        goto bail;
+  format = *data++;
+  if (format == 1) { /* kRegMapFormatNone */
+    /* no map */
+    printf("        (no map)\n");
+    addrWidth = 0;
+  } else if (format == 2) { /* kRegMapFormatCompact8 */
+    addrWidth = 1;
+  } else if (format == 3) { /* kRegMapFormatCompact16 */
+    addrWidth = 2;
+  } else if (format == 4) { /* kRegMapFormatDifferential */
+    dumpDifferentialCompressedMap(&data);
+    goto bail;
+  } else {
+    printf("        (unknown format %d!)\n", format);
+    /* don't know how to skip data; failure will cascade to end of class */
+    goto bail;
+  }
+
+  if (addrWidth > 0) {
+    u1 regWidth;
+    u2 numEntries;
+    int idx, addr, byte;
+
+    regWidth = *data++;
+    numEntries = *data++;
+    numEntries |= (*data++) << 8;
+
+    for (idx = 0; idx < numEntries; idx++) {
+      addr = *data++;
+      if (addrWidth > 1)
+        addr |= (*data++) << 8;
+
+      printf("        %4x:", addr);
+      for (byte = 0; byte < regWidth; byte++) {
+        printf(" %02x", *data++);
+      }
+      printf("\n");
     }
-
-    if (addrWidth > 0) {
-        u1 regWidth;
-        u2 numEntries;
-        int idx, addr, byte;
-
-        regWidth = *data++;
-        numEntries = *data++;
-        numEntries |= (*data++) << 8;
-
-        for (idx = 0; idx < numEntries; idx++) {
-            addr = *data++;
-            if (addrWidth > 1)
-                addr |= (*data++) << 8;
-
-            printf("        %4x:", addr);
-            for (byte = 0; byte < regWidth; byte++) {
-                printf(" %02x", *data++);
-            }
-            printf("\n");
-        }
-    }
+  }
 
 bail:
-    //if (addrWidth >= 0)
-    //    *pData = align32(data);
-    *pData = data;
+  // if (addrWidth >= 0)
+  //    *pData = align32(data);
+  *pData = data;
 }
 
 /*
@@ -1842,189 +1767,181 @@ bail:
  * dig through them here, but this is pretty fragile.  DO NOT rely on
  * this or derive other code from it.
  */
-void dumpRegisterMaps(DexFile* pDexFile)
-{
-    const u1* pClassPool = (const u1*)pDexFile->pRegisterMapPool;
-    const u4* classOffsets;
-    const u1* ptr;
-    u4 numClasses;
-    int baseFileOffset = (u1*) pClassPool - (u1*) pDexFile->pOptHeader;
-    int idx;
+void dumpRegisterMaps(DexFile *pDexFile) {
+  const u1 *pClassPool = (const u1 *)pDexFile->pRegisterMapPool;
+  const u4 *classOffsets;
+  const u1 *ptr;
+  u4 numClasses;
+  int baseFileOffset = (u1 *)pClassPool - (u1 *)pDexFile->pOptHeader;
+  int idx;
 
-    if (pClassPool == NULL) {
-        printf("No register maps found\n");
-        return;
+  if (pClassPool == NULL) {
+    printf("No register maps found\n");
+    return;
+  }
+
+  ptr = pClassPool;
+  numClasses = get4LE(ptr);
+  ptr += sizeof(u4);
+  classOffsets = (const u4 *)ptr;
+
+  printf("RMAP begins at offset 0x%07x\n", baseFileOffset);
+  printf("Maps for %d classes\n", numClasses);
+  for (idx = 0; idx < (int)numClasses; idx++) {
+    const DexClassDef *pClassDef;
+    const char *classDescriptor;
+
+    pClassDef = dexGetClassDef(pDexFile, idx);
+    classDescriptor = dexStringByTypeIdx(pDexFile, pClassDef->classIdx);
+
+    printf("%4d: +%d (0x%08x) %s\n", idx, classOffsets[idx],
+           baseFileOffset + classOffsets[idx], classDescriptor);
+
+    if (classOffsets[idx] == 0)
+      continue;
+
+    /*
+     * What follows is a series of RegisterMap entries, one for every
+     * direct method, then one for every virtual method.
+     */
+    DexClassData *pClassData;
+    const u1 *pEncodedData;
+    const u1 *data = (u1 *)pClassPool + classOffsets[idx];
+    u2 methodCount;
+    int i;
+
+    pEncodedData = dexGetClassData(pDexFile, pClassDef);
+    pClassData = dexReadAndVerifyClassData(&pEncodedData, NULL);
+    if (pClassData == NULL) {
+      fprintf(stderr, "Trouble reading class data\n");
+      continue;
     }
 
-    ptr = pClassPool;
-    numClasses = get4LE(ptr);
-    ptr += sizeof(u4);
-    classOffsets = (const u4*) ptr;
-
-    printf("RMAP begins at offset 0x%07x\n", baseFileOffset);
-    printf("Maps for %d classes\n", numClasses);
-    for (idx = 0; idx < (int) numClasses; idx++) {
-        const DexClassDef* pClassDef;
-        const char* classDescriptor;
-
-        pClassDef = dexGetClassDef(pDexFile, idx);
-        classDescriptor = dexStringByTypeIdx(pDexFile, pClassDef->classIdx);
-
-        printf("%4d: +%d (0x%08x) %s\n", idx, classOffsets[idx],
-            baseFileOffset + classOffsets[idx], classDescriptor);
-
-        if (classOffsets[idx] == 0)
-            continue;
-
-        /*
-         * What follows is a series of RegisterMap entries, one for every
-         * direct method, then one for every virtual method.
-         */
-        DexClassData* pClassData;
-        const u1* pEncodedData;
-        const u1* data = (u1*) pClassPool + classOffsets[idx];
-        u2 methodCount;
-        int i;
-
-        pEncodedData = dexGetClassData(pDexFile, pClassDef);
-        pClassData = dexReadAndVerifyClassData(&pEncodedData, NULL);
-        if (pClassData == NULL) {
-            fprintf(stderr, "Trouble reading class data\n");
-            continue;
-        }
-
-        methodCount = *data++;
-        methodCount |= (*data++) << 8;
-        data += 2;      /* two pad bytes follow methodCount */
-        if (methodCount != pClassData->header.directMethodsSize
-                            + pClassData->header.virtualMethodsSize)
-        {
-            printf("NOTE: method count discrepancy (%d != %d + %d)\n",
-                methodCount, pClassData->header.directMethodsSize,
-                pClassData->header.virtualMethodsSize);
-            /* this is bad, but keep going anyway */
-        }
-
-        printf("    direct methods: %d\n",
-            pClassData->header.directMethodsSize);
-        for (i = 0; i < (int) pClassData->header.directMethodsSize; i++) {
-            dumpMethodMap(pDexFile, &pClassData->directMethods[i], i, &data);
-        }
-
-        printf("    virtual methods: %d\n",
-            pClassData->header.virtualMethodsSize);
-        for (i = 0; i < (int) pClassData->header.virtualMethodsSize; i++) {
-            dumpMethodMap(pDexFile, &pClassData->virtualMethods[i], i, &data);
-        }
-
-        free(pClassData);
+    methodCount = *data++;
+    methodCount |= (*data++) << 8;
+    data += 2; /* two pad bytes follow methodCount */
+    if (methodCount !=
+        pClassData->header.directMethodsSize +
+            pClassData->header.virtualMethodsSize) {
+      printf("NOTE: method count discrepancy (%d != %d + %d)\n", methodCount,
+             pClassData->header.directMethodsSize,
+             pClassData->header.virtualMethodsSize);
+      /* this is bad, but keep going anyway */
     }
+
+    printf("    direct methods: %d\n", pClassData->header.directMethodsSize);
+    for (i = 0; i < (int)pClassData->header.directMethodsSize; i++) {
+      dumpMethodMap(pDexFile, &pClassData->directMethods[i], i, &data);
+    }
+
+    printf("    virtual methods: %d\n", pClassData->header.virtualMethodsSize);
+    for (i = 0; i < (int)pClassData->header.virtualMethodsSize; i++) {
+      dumpMethodMap(pDexFile, &pClassData->virtualMethods[i], i, &data);
+    }
+
+    free(pClassData);
+  }
 }
 
 /*
  * Dump the requested sections of the file.
  */
-void processDexFile(const char* fileName, DexFile* pDexFile)
-{
-    char* package = NULL;
-    int i;
+void processDexFile(const char *fileName, DexFile *pDexFile) {
+  char *package = NULL;
+  int i;
 
-    if (gOptions.verbose) {
-        printf("Opened '%s', DEX version '%.3s'\n", fileName,
-            pDexFile->pHeader->magic +4);
-    }
+  if (gOptions.verbose) {
+    printf("Opened '%s', DEX version '%.3s'\n", fileName,
+           pDexFile->pHeader->magic + 4);
+  }
 
-    if (gOptions.dumpRegisterMaps) {
-        dumpRegisterMaps(pDexFile);
-        return;
-    }
+  if (gOptions.dumpRegisterMaps) {
+    dumpRegisterMaps(pDexFile);
+    return;
+  }
 
-    if (gOptions.showFileHeaders)
-        dumpFileHeader(pDexFile);
+  if (gOptions.showFileHeaders)
+    dumpFileHeader(pDexFile);
 
-    if (gOptions.outputFormat == OUTPUT_XML)
-        printf("<api>\n");
+  if (gOptions.outputFormat == OUTPUT_XML)
+    printf("<api>\n");
 
-    for (i = 0; i < (int) pDexFile->pHeader->classDefsSize; i++) {
-        if (gOptions.showSectionHeaders)
-            dumpClassDef(pDexFile, i);
+  for (i = 0; i < (int)pDexFile->pHeader->classDefsSize; i++) {
+    if (gOptions.showSectionHeaders)
+      dumpClassDef(pDexFile, i);
 
-        dumpClass(pDexFile, i, &package);
-    }
+    dumpClass(pDexFile, i, &package);
+  }
 
-    /* free the last one allocated */
-    if (package != NULL) {
-        printf("</package>\n");
-        free(package);
-    }
+  /* free the last one allocated */
+  if (package != NULL) {
+    printf("</package>\n");
+    free(package);
+  }
 
-    if (gOptions.outputFormat == OUTPUT_XML)
-        printf("</api>\n");
+  if (gOptions.outputFormat == OUTPUT_XML)
+    printf("</api>\n");
 }
-
 
 /*
  * Process one file.
  */
-int process(const char* fileName)
-{
-    DexFile* pDexFile = NULL;
-    MemMapping map;
-    bool mapped = false;
-    int result = -1;
+int process(const char *fileName) {
+  DexFile *pDexFile = NULL;
+  MemMapping map;
+  bool mapped = false;
+  int result = -1;
 
-    if (gOptions.verbose)
-        printf("Processing '%s'...\n", fileName);
+  if (gOptions.verbose)
+    printf("Processing '%s'...\n", fileName);
 
-    if (dexOpenAndMap(fileName, gOptions.tempFileName, &map, false) != 0)
-        goto bail;
-    mapped = true;
+  if (dexOpenAndMap(fileName, gOptions.tempFileName, &map, false) != 0)
+    goto bail;
+  mapped = true;
 
-    int flags = kDexParseVerifyChecksum;
-    if (gOptions.ignoreBadChecksum)
-        flags |= kDexParseContinueOnError;
+  int flags = kDexParseVerifyChecksum;
+  if (gOptions.ignoreBadChecksum)
+    flags |= kDexParseContinueOnError;
 
-	pDexFile = dexFileParse((const u1*)map.addr, map.length, flags);
-    if (pDexFile == NULL) {
-        fprintf(stderr, "ERROR: DEX parse failed\n");
-        goto bail;
-    }
+  pDexFile = dexFileParse((const u1 *)map.addr, map.length, flags);
+  if (pDexFile == NULL) {
+    fprintf(stderr, "ERROR: DEX parse failed\n");
+    goto bail;
+  }
 
-    if (gOptions.checksumOnly) {
-        printf("Checksum verified\n");
-    } else {
-        processDexFile(fileName, pDexFile);
-    }
+  if (gOptions.checksumOnly) {
+    printf("Checksum verified\n");
+  } else {
+    processDexFile(fileName, pDexFile);
+  }
 
-    result = 0;
+  result = 0;
 
 bail:
-    if (mapped)
-        sysReleaseShmem(&map);
-    if (pDexFile != NULL)
-        dexFileFree(pDexFile);
-    return result;
+  if (mapped)
+    sysReleaseShmem(&map);
+  if (pDexFile != NULL)
+    dexFileFree(pDexFile);
+  return result;
 }
-
 
 /*
  * Show usage.
  */
-void usage(void)
-{
-    fprintf(stderr, "Copyright (C) 2007 The Android Open Source Project\n\n");
-    fprintf(stderr,
-        "%s: [-c] [-d] [-f] [-h] [-i] [-l layout] [-m] [-t tempfile] dexfile...\n",
-        gProgName);
-    fprintf(stderr, "\n");
-    fprintf(stderr, " -c : verify checksum and exit\n");
-    fprintf(stderr, " -d : disassemble code sections\n");
-    fprintf(stderr, " -f : display summary information from file header\n");
-    fprintf(stderr, " -h : display file header details\n");
-    fprintf(stderr, " -i : ignore checksum failures\n");
-    fprintf(stderr, " -l : output layout, either 'plain' or 'xml'\n");
-    fprintf(stderr, " -m : dump register maps (and nothing else)\n");
-    fprintf(stderr, " -t : temp file name (defaults to /sdcard/dex-temp-*)\n");
+void usage(void) {
+  fprintf(stderr, "Copyright (C) 2007 The Android Open Source Project\n\n");
+  fprintf(stderr, "%s: [-c] [-d] [-f] [-h] [-i] [-l layout] [-m] [-t tempfile] "
+                  "dexfile...\n",
+          gProgName);
+  fprintf(stderr, "\n");
+  fprintf(stderr, " -c : verify checksum and exit\n");
+  fprintf(stderr, " -d : disassemble code sections\n");
+  fprintf(stderr, " -f : display summary information from file header\n");
+  fprintf(stderr, " -h : display file header details\n");
+  fprintf(stderr, " -i : ignore checksum failures\n");
+  fprintf(stderr, " -l : output layout, either 'plain' or 'xml'\n");
+  fprintf(stderr, " -m : dump register maps (and nothing else)\n");
+  fprintf(stderr, " -t : temp file name (defaults to /sdcard/dex-temp-*)\n");
 }
 
 /*
@@ -2032,85 +1949,83 @@ void usage(void)
  *
  * I'm not using getopt_long() because we may not have it in libc.
  */
-int main(int argc, char* const argv[])
-{
-    bool wantUsage = false;
-    int ic;
+int main(int argc, char *const argv[]) {
+  bool wantUsage = false;
+  int ic;
 
-    memset(&gOptions, 0, sizeof(gOptions));
-    gOptions.verbose = true;
+  memset(&gOptions, 0, sizeof(gOptions));
+  gOptions.verbose = true;
 
-    while (1) {
-        ic = getopt(argc, argv, "cdfhil:mt:");
-        if (ic < 0)
-            break;
+  while (1) {
+    ic = getopt(argc, argv, "cdfhil:mt:");
+    if (ic < 0)
+      break;
 
-        switch (ic) {
-        case 'c':       // verify the checksum then exit
-            gOptions.checksumOnly = true;
-            break;
-        case 'd':       // disassemble Dalvik instructions
-            gOptions.disassemble = true;
-            break;
-        case 'f':       // dump outer file header
-            gOptions.showFileHeaders = true;
-            break;
-        case 'h':       // dump section headers, i.e. all meta-data
-            gOptions.showSectionHeaders = true;
-            break;
-        case 'i':       // continue even if checksum is bad
-            gOptions.ignoreBadChecksum = true;
-            break;
-        case 'l':       // layout
-            if (strcmp(optarg, "plain") == 0) {
-                gOptions.outputFormat = OUTPUT_PLAIN;
-            } else if (strcmp(optarg, "xml") == 0) {
-                gOptions.outputFormat = OUTPUT_XML;
-                gOptions.verbose = false;
-                gOptions.exportsOnly = true;
-            } else {
-                wantUsage = true;
-            }
-            break;
-        case 'm':       // dump register maps only
-            gOptions.dumpRegisterMaps = true;
-            break;
-        case 't':       // temp file, used when opening compressed Jar
-            gOptions.tempFileName = optarg;
-            break;
-        default:
-            wantUsage = true;
-            break;
-        }
-    }
-
-    if (optind == argc) {
-        fprintf(stderr, "%s: no file specified\n", gProgName);
+    switch (ic) {
+    case 'c': // verify the checksum then exit
+      gOptions.checksumOnly = true;
+      break;
+    case 'd': // disassemble Dalvik instructions
+      gOptions.disassemble = true;
+      break;
+    case 'f': // dump outer file header
+      gOptions.showFileHeaders = true;
+      break;
+    case 'h': // dump section headers, i.e. all meta-data
+      gOptions.showSectionHeaders = true;
+      break;
+    case 'i': // continue even if checksum is bad
+      gOptions.ignoreBadChecksum = true;
+      break;
+    case 'l': // layout
+      if (strcmp(optarg, "plain") == 0) {
+        gOptions.outputFormat = OUTPUT_PLAIN;
+      } else if (strcmp(optarg, "xml") == 0) {
+        gOptions.outputFormat = OUTPUT_XML;
+        gOptions.verbose = false;
+        gOptions.exportsOnly = true;
+      } else {
         wantUsage = true;
+      }
+      break;
+    case 'm': // dump register maps only
+      gOptions.dumpRegisterMaps = true;
+      break;
+    case 't': // temp file, used when opening compressed Jar
+      gOptions.tempFileName = optarg;
+      break;
+    default:
+      wantUsage = true;
+      break;
     }
+  }
 
-    if (gOptions.checksumOnly && gOptions.ignoreBadChecksum) {
-        fprintf(stderr, "Can't specify both -c and -i\n");
-        wantUsage = true;
-    }
+  if (optind == argc) {
+    fprintf(stderr, "%s: no file specified\n", gProgName);
+    wantUsage = true;
+  }
 
-    /* initialize some VM tables */
-    gInstrWidth = dexCreateInstrWidthTable();
-    gInstrFormat = dexCreateInstrFormatTable();
+  if (gOptions.checksumOnly && gOptions.ignoreBadChecksum) {
+    fprintf(stderr, "Can't specify both -c and -i\n");
+    wantUsage = true;
+  }
 
-    if (wantUsage) {
-        usage();
-        return 2;
-    }
+  /* initialize some VM tables */
+  gInstrWidth = dexCreateInstrWidthTable();
+  gInstrFormat = dexCreateInstrFormatTable();
 
-    int result = 0;
-    while (optind < argc) {
-        result |= process(argv[optind++]);
-    }
+  if (wantUsage) {
+    usage();
+    return 2;
+  }
 
-    free(gInstrWidth);
-    free(gInstrFormat);
+  int result = 0;
+  while (optind < argc) {
+    result |= process(argv[optind++]);
+  }
 
-    return (result != 0);
+  free(gInstrWidth);
+  free(gInstrFormat);
+
+  return (result != 0);
 }
-
