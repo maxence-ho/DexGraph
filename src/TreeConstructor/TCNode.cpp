@@ -8,8 +8,8 @@
 namespace TreeConstructor
 {
 Node::Node(uint32_t _baseAddr,
-		   char _opcode,
-		   std::string _instructions)
+		       char _opcode,
+		       std::string _instructions)
 {
 	this->baseAddr = _baseAddr;
 	this->opcode = _opcode;
@@ -20,11 +20,11 @@ void Node::pretty_print() const
 {
 	// Print current node
 	auto node_str = std::basic_stringstream<char>();
-	node_str << "------------" << std::endl;
-	node_str << "base address: " << this->baseAddr << std::endl;
-	node_str << "opcode: 0x" << std::hex << std::stoi(std::to_string(this->opcode)) << std::endl;
-	node_str << "instructions: " << this->instructions << std::endl;
-	node_str << "------------" << std::endl;
+	node_str << "------------" << "\n";
+	node_str << "base address: " << this->baseAddr << "\n";
+	node_str << "opcode: 0x" << std::hex << std::stoi(std::to_string(this->opcode)) << "\n";
+	node_str << "instructions: " << this->instructions << "\n";
+	node_str << "------------\n" << "\n";
 	Helper::write(Helper::classlist_filename, node_str.str());
 	// Recursively print children
 	if (this->next_nodes == nullptr)
@@ -42,19 +42,19 @@ void Node::dot_fmt_dump() const
 	// Print graph description
 	auto constexpr tab_str = "  ";
 	std::stringstream dot_str;
-	dot_str << "digraph {" << std::endl;
-	dot_str << tab_str << "label=\"" << std::hex << this->baseAddr << "\"" << std::endl;
+	dot_str << "digraph {\n";
+	dot_str << tab_str << "label=\"" << std::hex << this->baseAddr << "\"\n";
 	auto current_node = this;
 	while (current_node != nullptr)
 	{
 		dot_str << tab_str << "\"0x" << std::hex << current_node->baseAddr << "\"";
-		dot_str << "[label=\"0x" << std::hex << std::stoi(std::to_string(current_node->opcode)) << "\"];" << std::endl;
+		dot_str << "[label=\"0x" << std::hex << std::stoi(std::to_string(current_node->opcode)) << "\"];\n";
 		auto const next_node = current_node->next_nodes.get();
 		if (next_node != nullptr)
 		{
 			dot_str << tab_str << "\"0x" << std::hex << current_node->baseAddr << "\"";
 			dot_str << " -> ";
-			dot_str << "\"0x" << std::hex << next_node->baseAddr << "\";" << std::endl;
+			dot_str << "\"0x" << std::hex << next_node->baseAddr << "\";\n";
 		}
 		current_node = next_node;
 	}
@@ -70,11 +70,11 @@ void Node::copy(Node const& node)
 }
 
 void append_node_to(Node& parent_node,
-				    Node const& child_node)
+        				    Node const& child_node)
 {
 	auto new_child_ptr = std::unique_ptr<Node>(new Node(child_node.baseAddr, 
-											         	child_node.opcode,
-														child_node.instructions));
+			                      								         	child_node.opcode,
+													                          	child_node.instructions));
 	if (parent_node.baseAddr == -1)
 	{
 		parent_node.copy(child_node);

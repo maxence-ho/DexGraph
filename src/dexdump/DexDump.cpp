@@ -1284,10 +1284,9 @@ void dumpBytecodes(DexFile* pDexFile, const DexMethod* pDexMethod)
         insns += insnWidth;
         insnIdx += insnWidth;
     }
-	method_tree.pretty_print();
 	method_tree.dot_fmt_dump();
 
-    free(className);
+  free(className);
 }
 
 /*
@@ -1304,14 +1303,6 @@ void dumpCode(DexFile* pDexFile, const DexMethod* pDexMethod)
 
     if (gOptions.disassemble)
         dumpBytecodes(pDexFile, pDexMethod);
-/* NOCOMMIT
-    dumpCatches(pDexFile, pCode);
-*/
-    /* both of these are encoded in debug info */
-/* NOCOMMIT
-    dumpPositions(pDexFile, pCode, pDexMethod);
-    dumpLocals(pDexFile, pCode, pDexMethod);
-*/
 }
 
 /*
@@ -1347,19 +1338,15 @@ void dumpMethod(DexFile* pDexFile, const DexMethod* pDexMethod, int i, std::stri
 		// Modified Tool
 		TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename, std::string(4, ' ') + std::string(name));
 
-        // NOCOMMIT printf("      type          : '%s'\n", typeDescriptor);
-        // NOCOMMIT printf("      access        : 0x%04x (%s)\n",
-        // NOCOMMIT     pDexMethod->accessFlags, accessStr);
+    if (pDexMethod->codeOff == 0) {
+        printf("      code          : (none)\n");
+    } else {
+        printf("      code          -\n");
+        dumpCode(pDexFile, pDexMethod);
+    }
 
-        if (pDexMethod->codeOff == 0) {
-            printf("      code          : (none)\n");
-        } else {
-            printf("      code          -\n");
-            dumpCode(pDexFile, pDexMethod);
-        }
-
-        if (gOptions.disassemble)
-            putchar('\n');
+    if (gOptions.disassemble)
+        putchar('\n');
 
 		// Modified Tool
 		TreeConstructor::Helper::write(TreeConstructor::Helper::classlist_filename, std::string(4, ' ') + std::string(20, '-'));
