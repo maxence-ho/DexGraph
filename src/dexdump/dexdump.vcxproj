@@ -100,7 +100,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\..\..\Desktop\Projet3A\dexdump\TreeConstructor\TCOutputHelper.cpp" />
     <ClCompile Include="..\libdex\CmdUtils.cpp" />
     <ClCompile Include="..\libdex\DexCatch.cpp" />
     <ClCompile Include="..\libdex\DexClass.cpp" />
@@ -115,7 +114,9 @@
     <ClCompile Include="..\libdex\SysUtil.cpp" />
     <ClCompile Include="..\libdex\ZipArchive.cpp" />
     <ClCompile Include="..\msvc\getopt.c" />
+    <ClCompile Include="..\TreeConstructor\OpcodeType.cpp" />
     <ClCompile Include="..\TreeConstructor\TCNode.cpp" />
+    <ClCompile Include="..\TreeConstructor\TCOutputHelper.cpp" />
     <ClCompile Include="DexDump.cpp" />
     <ClCompile Include="OpCodeNames.c" />
   </ItemGroup>
@@ -135,6 +136,7 @@
     <ClInclude Include="..\libdex\SysUtil.h" />
     <ClInclude Include="..\libdex\ZipArchive.h" />
     <ClInclude Include="..\msvc\getopt.h" />
+    <ClInclude Include="..\TreeConstructor\OpcodeType.h" />
     <ClInclude Include="..\TreeConstructor\TCNode.h" />
     <ClInclude Include="OpCodeNames.h" />
   </ItemGroup>

@@ -8,8 +8,8 @@
 namespace TreeConstructor
 {
 Node::Node(uint32_t _baseAddr,
-		       char _opcode,
-		       std::string _instructions)
+		   OpCode _opcode,
+		   std::string _instructions)
 {
 	this->baseAddr = _baseAddr;
 	this->opcode = _opcode;
@@ -48,7 +48,8 @@ void Node::dot_fmt_dump() const
 	while (current_node != nullptr)
 	{
 		dot_str << tab_str << "\"0x" << std::hex << current_node->baseAddr << "\"";
-		dot_str << "[label=\"0x" << std::hex << std::stoi(std::to_string(current_node->opcode)) << "\"];\n";
+		auto const current_node_optype = OpCodeClassifier::get_opcode_type(current_node->opcode);
+		dot_str << "[label=\"" << std::hex << OpCodeTypeToStrMap.find(current_node_optype)->second << "\"];\n";
 		auto const next_node = current_node->next_nodes.get();
 		if (next_node != nullptr)
 		{
@@ -71,11 +72,11 @@ void Node::copy(Node const& node)
 }
 
 void append_node_to(Node& parent_node,
-        				    Node const& child_node)
+        			Node const& child_node)
 {
 	auto new_child_ptr = std::unique_ptr<Node>(new Node(child_node.baseAddr, 
-			                      								         	child_node.opcode,
-													                          	child_node.instructions));
+			                      						child_node.opcode,
+													    child_node.instructions));
 	if (parent_node.baseAddr == -1)
 	{
 		parent_node.copy(child_node);

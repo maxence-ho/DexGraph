@@ -4,19 +4,21 @@
 #include <vector>
 #include <memory>
 
+#include <TreeConstructor/OpcodeType.h>
+
 namespace TreeConstructor
 {
 struct Node
 {
   uint32_t baseAddr = -1;
-  char opcode = 0;
+  OpCode opcode = static_cast<OpCode>(0x00);
   std::string instructions;
   std::unique_ptr<Node> next_nodes = nullptr;
 
   Node() {};
   Node(uint32_t _baseAddr,
-	     char _opcode,
-	     std::string _instructions);
+	   OpCode _opcode,
+	   std::string _instructions);
 
   void copy(Node const& node);
   void pretty_print() const;
@@ -24,5 +26,5 @@ struct Node
 };
 
 void append_node_to(Node& parent_node,
-        				    Node const& child_node);
+        		    Node const& child_node);
 }

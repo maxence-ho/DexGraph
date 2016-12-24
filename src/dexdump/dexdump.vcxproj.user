@@ -5,7 +5,7 @@
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <LocalDebuggerCommandArguments>-d C:\Users\Maxence\Desktop\Projet3A\Uncompressed\classes.dex &gt;&gt; output.txt</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>-d C:\Users\Ho\Desktop\Maxence\2048_apk\classes.dex &gt;&gt; C:\Users\Ho\Desktop\Maxence\output.txt</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
 </Project>
