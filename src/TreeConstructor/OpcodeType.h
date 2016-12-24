@@ -34,5 +34,6 @@ namespace OpCodeClassifier
 	bool is_jmp(OpCode const& candidate);
 	bool is_exception(OpCode const& candidate);
 	bool is_ret(OpCode const& candidate);
+  bool is_new(OpCode const & candidate);
 	OpCodeType get_opcode_type(OpCode const& opcode);
 }

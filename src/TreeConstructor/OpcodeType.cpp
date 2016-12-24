@@ -55,6 +55,14 @@ auto constexpr ret_opcodes = std::array<OpCode, 4>
 	OP_RETURN_OBJECT,
 };
 
+auto constexpr new_opcodes = std::array<OpCode, 4>
+{
+  OP_NEW_INSTANCE,
+  OP_NEW_ARRAY,
+  OP_FILLED_NEW_ARRAY,
+  OP_FILLED_NEW_ARRAY_RANGE,
+};
+
 bool OpCodeClassifier::is_if(OpCode const & candidate)
 {
 	return (std::find(begin(if_opcodes), end(if_opcodes), candidate)
@@ -85,18 +93,27 @@ bool OpCodeClassifier::is_ret(OpCode const & candidate)
 		!= std::end(ret_opcodes));
 }
 
+bool OpCodeClassifier::is_new(OpCode const & candidate)
+{
+  return (std::find(begin(new_opcodes), end(new_opcodes), candidate)
+    != std::end(new_opcodes));
+}
+
+
 OpCodeType OpCodeClassifier::get_opcode_type(OpCode const& opcode)
 {
-	if (is_if(opcode))
-		return OpCodeType::IF;
-	else if (is_call(opcode))
-		return OpCodeType::CALL;
-	else if (is_jmp(opcode))
-		return OpCodeType::JMP;
-	else if (is_exception(opcode))
-		return OpCodeType::THROW;
-	else if (is_ret(opcode))
-		return OpCodeType::RET;
+  if (is_if(opcode))
+    return OpCodeType::IF;
+  else if (is_call(opcode))
+    return OpCodeType::CALL;
+  else if (is_jmp(opcode))
+    return OpCodeType::JMP;
+  else if (is_exception(opcode))
+    return OpCodeType::THROW;
+  else if (is_ret(opcode))
+    return OpCodeType::RET;
+  else if (is_new(opcode))
+    return OpCodeType::NEW;
 	else
 		return OpCodeType::SEQ;
 }
