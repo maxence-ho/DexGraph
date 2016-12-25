@@ -520,12 +520,13 @@ const char* getClassDescriptor(DexFile* pDexFile, u4 classIdx)
 TreeConstructor::Node dumpInstruction(DexFile* pDexFile, 
 	const DexCode* pCode,
 	int insnIdx,
-    int insnWidth,
+  int insnWidth,
 	const DecodedInstruction* pDecInsn)
 {
 	// Modified Tool
 	auto const margin_str = std::string(4, ' ');
 	std::string buff_str;
+  uint32_t arg_offset = 0;
 
 	std::stringstream node_insns;
 
@@ -538,27 +539,27 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, "%04x: packed-switch-data (%d units)", insnIdx,
                     insnWidth);
-      node_insns << buff_str;
+      
     } else if (instr == kSparseSwitchSignature) {
       // Modified Tool
       tc_str_format(buff_str, "%04x: sparse-switch-data (%d units)", insnIdx,
                     insnWidth);
-      node_insns << buff_str;
+      
     } else if (instr == kArrayDataSignature) {
       // Modified Tool
       tc_str_format(buff_str, "%04x: array-data (%d units)", insnIdx,
                     insnWidth);
-      node_insns << buff_str;
+      
     } else {
       // Modified Tool
       tc_str_format(buff_str, "%04x: nop // spacer", insnIdx);
-      node_insns << buff_str;
+      
     }
   } else {
     // Modified Tool
     tc_str_format(buff_str, "%04x: %s", insnIdx,
                   getOpcodeName(pDecInsn->opCode));
-    node_insns << buff_str;
+    
   }
 
   switch (dexGetInstrFormat(gInstrFormat, pDecInsn->opCode)) {
@@ -568,7 +569,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
   {
     // Modified Tool
     tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
-    node_insns << buff_str;
+    
     break;
     } 
     case kFmt11n:        // op vA, #+B
@@ -576,14 +577,14 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, #int %d // #%x", pDecInsn->vA,
                     (s4)pDecInsn->vB, (u1)pDecInsn->vB);
-      node_insns << buff_str;
+      
       break;
     }
     case kFmt11x: // op vAA
     {
       // Modified Tool
       tc_str_format(buff_str, " v%d", pDecInsn->vA);
-      node_insns << buff_str;
+      
       break;
     }
     case kFmt10t:        // op +AA
@@ -593,14 +594,14 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " %04x // %c%04x", insnIdx + targ,
                     (targ < 0) ? '-' : '+', (targ < 0) ? -targ : targ);
-      node_insns << buff_str;
+      
       break;
     }
     case kFmt22x: // op vAA, vBBBB
     {
       // Modified Tool
       tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
-      node_insns << buff_str;
+      
       break;
     }
     case kFmt21t: // op vAA, +BBBB
@@ -610,7 +611,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       tc_str_format(buff_str, " v%d, %04x // %c%04x", pDecInsn->vA,
                     insnIdx + targ, (targ < 0) ? '-' : '+',
                     (targ < 0) ? -targ : targ);
-      node_insns << buff_str;
+      
       break;
     }
     case kFmt21s: // op vAA, #+BBBB
@@ -618,7 +619,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, #int %d // #%x", pDecInsn->vA,
                     (s4)pDecInsn->vB, (u2)pDecInsn->vB);
-      node_insns << buff_str;
+      
       break;
     }
     case kFmt21h: // op vAA, #+BBBB0000[00000000]
@@ -629,13 +630,13 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
         // Modified Tool
         tc_str_format(buff_str, " v%d, #int %d // #%x", pDecInsn->vA, value,
                       (u2)pDecInsn->vB);
-        node_insns << buff_str;
+        
       } else {
         s8 value = ((s8)pDecInsn->vB) << 48;
         // Modified Tool
         tc_str_format(buff_str, " v%d, #long %lld // #%x", pDecInsn->vA, value,
                       (u2)pDecInsn->vB);
-        node_insns << buff_str;
+        
       }
       break;
     }
@@ -645,14 +646,14 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
         // Modified Tool
         tc_str_format(buff_str, " v%d, \"%s\" // string@%04x", pDecInsn->vA,
                       dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
-        node_insns << buff_str;
+        
       } else if (pDecInsn->opCode == OP_CHECK_CAST ||
                  pDecInsn->opCode == OP_NEW_INSTANCE ||
                  pDecInsn->opCode == OP_CONST_CLASS) {
         // Modified Tool
         tc_str_format(buff_str, " v%d, %s // class@%04x", pDecInsn->vA,
                       getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
-        node_insns << buff_str;
+        
       } else /* OP_SGET* */ {
         FieldMethodInfo fieldInfo;
         if (getFieldInfo(pDexFile, pDecInsn->vB, &fieldInfo)) {
@@ -660,12 +661,12 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
           tc_str_format(buff_str, " v%d, %s.%s:%s // field@%04x", pDecInsn->vA,
                         fieldInfo.classDescriptor, fieldInfo.name,
                         fieldInfo.signature, pDecInsn->vB);
-          node_insns << buff_str;
+          
         } else {
           // Modified Tool
           tc_str_format(buff_str, " v%d, ??? // field@%04x", pDecInsn->vA,
                         pDecInsn->vB);
-          node_insns << buff_str;
+          
         }
       }
       break;
@@ -675,7 +676,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, v%d, v%d", pDecInsn->vA, pDecInsn->vB,
                     pDecInsn->vC);
-      node_insns << buff_str;
+      
       break;
     }
     case kFmt22b: // op vAA, vBB, #+CC
@@ -683,7 +684,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, v%d, #int %d // #%02x", pDecInsn->vA,
                     pDecInsn->vB, (s4)pDecInsn->vC, (u1)pDecInsn->vC);
-      node_insns << buff_str;
+      
       break;
     }
     case kFmt22t: // op vA, vB, +CCCC
@@ -693,7 +694,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       tc_str_format(buff_str, " v%d, v%d, %04x // %c%04x", pDecInsn->vA,
                     pDecInsn->vB, insnIdx + targ, (targ < 0) ? '-' : '+',
                     (targ < 0) ? -targ : targ);
-      node_insns << buff_str;
+      arg_offset = insnIdx + targ;
       break;
     }
     case kFmt22s: // op vA, vB, #+CCCC
@@ -701,7 +702,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, v%d, #int %d // #%04x", pDecInsn->vA,
                     pDecInsn->vB, (s4)pDecInsn->vC, (u2)pDecInsn->vC);
-      node_insns << buff_str;
+      
       break;
     }
     case kFmt22c: // op vA, vB, thing@CCCC
@@ -713,19 +714,19 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
           tc_str_format(buff_str, " v%d, v%d, %s.%s:%s // field@%04x",
                         pDecInsn->vA, pDecInsn->vB, fieldInfo.classDescriptor,
                         fieldInfo.name, fieldInfo.signature, pDecInsn->vC);
-          node_insns << buff_str;
+          
         } else {
           // Modified Tool
           tc_str_format(buff_str, " v%d, v%d, ??? // field@%04x", pDecInsn->vA,
                         pDecInsn->vB, pDecInsn->vC);
-          node_insns << buff_str;
+          
         }
       } else {
         // Modified Tool
         tc_str_format(buff_str, " v%d, v%d, %s // class@%04x", pDecInsn->vA,
                       pDecInsn->vB, getClassDescriptor(pDexFile, pDecInsn->vC),
                       pDecInsn->vC);
-        node_insns << buff_str;
+        
       }
       break;
     }
@@ -734,14 +735,14 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, v%d, [obj+%04x]", pDecInsn->vA,
                     pDecInsn->vB, pDecInsn->vC);
-      node_insns << buff_str;
+      
       break;
     }
     case kFmt30t:
     {
       // Modified Tool
       tc_str_format(buff_str, " #%08x", pDecInsn->vA);
-      node_insns << buff_str;
+      
       break;
     }
     case kFmt31i: // op vAA, #+BBBBBBBB
@@ -755,7 +756,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, #float %f // #%08x", pDecInsn->vA, conv.f,
                     pDecInsn->vB);
-      node_insns << buff_str;
+      
       break;
     }
     case kFmt31c: // op vAA, thing@BBBBBBBB
@@ -763,7 +764,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, \"%s\" // string@%08x", pDecInsn->vA,
                     dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
-      node_insns << buff_str;
+      
       break;
     }
     case kFmt31t: // op vAA, offset +BBBBBBBB
@@ -771,14 +772,14 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, %08x // +%08x", pDecInsn->vA,
                     insnIdx + pDecInsn->vB, pDecInsn->vB);
-      node_insns << buff_str;
+      
       break;
     }
     case kFmt32x: // op vAAAA, vBBBB
     {
       // Modified Tool
       tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
-      node_insns << buff_str;
+      
       break;
     }
     case kFmt35c: // op vB, {vD, vE, vF, vG, vA}, thing@CCCC
@@ -799,7 +800,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
         // Modified Tool
         tc_str_format(buff_str, "}, %s // class@%04x",
                       getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
-        node_insns << buff_str;
+        
       } else {
         FieldMethodInfo methInfo;
         if (getMethodInfo(pDexFile, pDecInsn->vB, &methInfo)) {
@@ -807,11 +808,11 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
           tc_str_format(buff_str, "}, %s.%s:%s // method@%04x",
                         methInfo.classDescriptor, methInfo.name,
                         methInfo.signature, pDecInsn->vB);
-          node_insns << buff_str;
+          
         } else {
           // Modified Tool
           tc_str_format(buff_str, "}, ??? // method@%04x", pDecInsn->vB);
-          node_insns << buff_str;
+          
         }
       }
       break;
@@ -833,7 +834,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, "}, [%04x] // vtable #%04x", pDecInsn->vB,
                     pDecInsn->vB);
-      node_insns << buff_str;
+      
     } break;
     case kFmt3rc: // op {vCCCC .. v(CCCC+AA-1)}, meth@BBBB
     {
@@ -845,17 +846,17 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
         if (i == 0) {
           // Modified Tool
           tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
-          node_insns << buff_str;
+          
           // Modified Tool
           tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
-          node_insns << buff_str;
+          
         }
       }
       if (pDecInsn->opCode == OP_FILLED_NEW_ARRAY_RANGE) {
         // Modified Tool
         tc_str_format(buff_str, "}, %s // class@%04x",
                       getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
-        node_insns << buff_str;
+        
       } else {
         FieldMethodInfo methInfo;
         if (getMethodInfo(pDexFile, pDecInsn->vB, &methInfo)) {
@@ -863,11 +864,11 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
           tc_str_format(buff_str, "}, %s.%s:%s // method@%04x",
                         methInfo.classDescriptor, methInfo.name,
                         methInfo.signature, pDecInsn->vB);
-          node_insns << buff_str;
+          
         } else {
           // Modified Tool
           tc_str_format(buff_str, "}, ??? // method@%04x", pDecInsn->vB);
-          node_insns << buff_str;
+          
         }
       }
       break;
@@ -893,7 +894,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, "}, [%04x] // vtable #%04x", pDecInsn->vB,
                     pDecInsn->vB);
-      node_insns << buff_str;
+      
       break;
     } 
     case kFmt3rinline: // [opt] execute-inline/range
@@ -912,7 +913,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, "}, [%04x] // inline #%04x", pDecInsn->vB,
                     pDecInsn->vB);
-      node_insns << buff_str;
+      
       break;
     } 
     case kFmt3inline: // [opt] inline invoke
@@ -931,7 +932,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, "}, [%04x] // inline #%04x", pDecInsn->vB,
                     pDecInsn->vB);
-      node_insns << buff_str;
+      
       break;
     } 
     case kFmt51l: // op vAA, #+BBBBBBBBBBBBBBBB
@@ -945,7 +946,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, #double %f // #%016llx", pDecInsn->vA,
                     conv.d, pDecInsn->vB_wide);
-      node_insns << buff_str;
+      
       break;
     } 
     case kFmtUnknown:
@@ -954,7 +955,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
     {
       // Modified Tool
       tc_str_format(buff_str, " ???");
-      node_insns << buff_str;
+      
       break;
     }
     }
@@ -962,8 +963,11 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
     // Construct Tree Node
     auto method_node =
         TreeConstructor::Node(((u1 *)insns - pDexFile->baseAddr) + insnIdx * 2,
-                              pDecInsn->opCode, node_insns.str());
-
+                              insnWidth,
+                              pDecInsn->opCode,
+                              insnIdx,
+                              arg_offset);
+  
     return method_node;
 }
 
@@ -972,59 +976,63 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
  */
 void dumpBytecodes(DexFile* pDexFile, const DexMethod* pDexMethod)
 {
-    const DexCode* pCode = dexGetCode(pDexFile, pDexMethod);
-    const u2* insns;
-    int insnIdx;
-    FieldMethodInfo methInfo;
-    int startAddr;
-    char* className = NULL;
+  const DexCode* pCode = dexGetCode(pDexFile, pDexMethod);
+  const u2* insns;
+  int insnIdx;
+  FieldMethodInfo methInfo;
+  int startAddr;
+  char* className = NULL;
 
-    assert(pCode->insnsSize > 0);
-    insns = pCode->insns;
+  assert(pCode->insnsSize > 0);
+  insns = pCode->insns;
 
-    getMethodInfo(pDexFile, pDexMethod->methodIdx, &methInfo);
-    startAddr = ((u1*)pCode - pDexFile->baseAddr);
+  getMethodInfo(pDexFile, pDexMethod->methodIdx, &methInfo);
+  startAddr = ((u1*)pCode - pDexFile->baseAddr);
 
-    className = descriptorToDot(methInfo.classDescriptor);
+  className = descriptorToDot(methInfo.classDescriptor);
 
-    insnIdx = 0;
-	TreeConstructor::Node method_tree;
-    while (insnIdx < (int) pCode->insnsSize) {
-        int insnWidth;
-        OpCode opCode;
-        DecodedInstruction decInsn;
-        u2 instr;
+  insnIdx = 0;
+  std::vector<TreeConstructor::NodeSPtr> node_vector;
+  while (insnIdx < (int) pCode->insnsSize) {
+    int insnWidth;
+    OpCode opCode;
+    DecodedInstruction decInsn;
+    u2 instr;
 
-        instr = get2LE((const u1*)insns);
-        if (instr == kPackedSwitchSignature) {
-            insnWidth = 4 + get2LE((const u1*)(insns+1)) * 2;
-        } else if (instr == kSparseSwitchSignature) {
-            insnWidth = 2 + get2LE((const u1*)(insns+1)) * 4;
-        } else if (instr == kArrayDataSignature) {
-            int width = get2LE((const u1*)(insns+1));
-            int size = get2LE((const u1*)(insns+2)) | 
-                       (get2LE((const u1*)(insns+3))<<16);
-            // The plus 1 is to round up for odd size and width 
-            insnWidth = 4 + ((size * width) + 1) / 2;
-        } else {
-            opCode = (OpCode)(instr & 0xff);
-            insnWidth = dexGetInstrWidthAbs(gInstrWidth, opCode);
-            if (insnWidth == 0) {
-                fprintf(stderr,
-                    "GLITCH: zero-width instruction at idx=0x%04x\n", insnIdx);
-                break;
-            }
-        }
-
-        dexDecodeInstruction(gInstrFormat, insns, &decInsn);
-        auto instr_node = dumpInstruction(pDexFile, pCode, insnIdx, insnWidth, &decInsn);
-
-		TreeConstructor::append_node_to(method_tree,instr_node);
-
-        insns += insnWidth;
-        insnIdx += insnWidth;
+    instr = get2LE((const u1*)insns);
+    if (instr == kPackedSwitchSignature) {
+      insnWidth = 4 + get2LE((const u1*)(insns+1)) * 2;
+    } else if (instr == kSparseSwitchSignature) {
+      insnWidth = 2 + get2LE((const u1*)(insns+1)) * 4;
+    } else if (instr == kArrayDataSignature) {
+      int width = get2LE((const u1*)(insns+1));
+      int size = get2LE((const u1*)(insns+2)) | 
+                  (get2LE((const u1*)(insns+3))<<16);
+      // The plus 1 is to round up for odd size and width 
+      insnWidth = 4 + ((size * width) + 1) / 2;
+    } else {
+      opCode = (OpCode)(instr & 0xff);
+      insnWidth = dexGetInstrWidthAbs(gInstrWidth, opCode);
+      if (insnWidth == 0) {
+        fprintf(stderr,
+            "GLITCH: zero-width instruction at idx=0x%04x\n", insnIdx);
+        break;
+      }
     }
-	method_tree.dot_fmt_dump();
+
+    dexDecodeInstruction(gInstrFormat, insns, &decInsn);
+    auto const instr_node =
+        dumpInstruction(pDexFile, pCode, insnIdx, insnWidth, &decInsn);
+
+    insns += insnWidth;
+    insnIdx += insnWidth;
+
+    // Add to node vector
+    node_vector.push_back(std::make_shared<TreeConstructor::Node>(instr_node));
+  }
+
+  auto const nodeptr = TreeConstructor::construct_node_from_vec(node_vector);
+  nodeptr->dot_fmt_dump();
 
   free(className);
 }

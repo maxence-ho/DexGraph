@@ -65,38 +65,38 @@ auto constexpr new_opcodes = std::array<OpCode, 4>
 
 bool OpCodeClassifier::is_if(OpCode const & candidate)
 {
-	return (std::find(begin(if_opcodes), end(if_opcodes), candidate)
-		!= std::end(if_opcodes));
+  return (std::find(begin(if_opcodes), end(if_opcodes), candidate) !=
+          std::end(if_opcodes));
 }
 
 bool OpCodeClassifier::is_call(OpCode const & candidate)
 {
-	return (std::find(begin(call_opcodes), end(call_opcodes), candidate)
-		!= std::end(call_opcodes));
+  return (std::find(begin(call_opcodes), end(call_opcodes), candidate) !=
+          std::end(call_opcodes));
 }
 
 bool OpCodeClassifier::is_jmp(OpCode const & candidate)
 {
-	return (std::find(begin(jmp_opcodes), end(jmp_opcodes), candidate)
-		!= std::end(jmp_opcodes));
+  return (std::find(begin(jmp_opcodes), end(jmp_opcodes), candidate) !=
+          std::end(jmp_opcodes));
 }
 
 bool OpCodeClassifier::is_exception(OpCode const & candidate)
 {
-	return (std::find(begin(exception_opcodes), end(exception_opcodes), candidate)
-		!= std::end(exception_opcodes));
+  return (std::find(begin(exception_opcodes), end(exception_opcodes),
+                    candidate) != std::end(exception_opcodes));
 }
 
 bool OpCodeClassifier::is_ret(OpCode const & candidate)
 {
-	return (std::find(begin(ret_opcodes), end(ret_opcodes), candidate)
-		!= std::end(ret_opcodes));
+  return (std::find(begin(ret_opcodes), end(ret_opcodes), candidate) !=
+          std::end(ret_opcodes));
 }
 
 bool OpCodeClassifier::is_new(OpCode const & candidate)
 {
-  return (std::find(begin(new_opcodes), end(new_opcodes), candidate)
-    != std::end(new_opcodes));
+  return (std::find(begin(new_opcodes), end(new_opcodes), candidate) !=
+          std::end(new_opcodes));
 }
 
 

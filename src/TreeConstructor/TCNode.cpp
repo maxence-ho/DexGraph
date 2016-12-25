@@ -1,19 +1,61 @@
 #include <iostream>
+#include <iomanip>
 #include <sstream>
 #include <string>
 
 #include <TreeConstructor/TCOutputHelper.h>
 #include <TreeConstructor/TCNode.h>
 
+#define tc_print(string) { \
+  printf("%s", string.c_str()); \
+}  \
+
+namespace
+{
+  auto constexpr tab_str = "  ";
+
+  std::string get_formated_hex(int const& int_value)
+  {
+    std::stringstream s;
+    s << "0x" 
+      << std::setfill('0') 
+      << std::setw(4)
+      << std::hex 
+      << int_value;
+    return s.str();
+  }
+
+  std::string get_dot_header(TreeConstructor::Node const& node)
+  {
+    std::stringstream header_ss;
+    header_ss << "digraph {\n";
+    header_ss << tab_str << "label=\""
+      << get_formated_hex(node.baseAddr) << "\"\n";
+    return header_ss.str();
+  }
+
+  std::string get_dot_footer()
+  {
+    std::stringstream footer_ss;
+    footer_ss << "}\n";
+    return footer_ss.str();
+  }
+}
+
 namespace TreeConstructor
 {
-Node::Node(uint32_t _baseAddr,
-		   OpCode _opcode,
-		   std::string _instructions)
+Node::Node(uint32_t const& _baseAddr,
+           uint16_t const& _size,
+		       OpCode const& _opcode,
+           uint32_t const& _internal_offset,
+           uint32_t const& _opt_arg_offset)
 {
 	this->baseAddr = _baseAddr;
+  this->size = _size;
 	this->opcode = _opcode;
-	this->instructions = _instructions;
+  this->intern_offset = _internal_offset;
+  this->opt_arg_offset = _opt_arg_offset;
+  this->opcode_type = OpCodeClassifier::get_opcode_type(_opcode);
 }
 
 void Node::pretty_print() const
@@ -22,72 +64,149 @@ void Node::pretty_print() const
 	auto node_str = std::basic_stringstream<char>();
 	node_str << "------------" << "\n";
 	node_str << "base address: " << this->baseAddr << "\n";
-	node_str << "opcode: 0x" << std::hex << std::stoi(std::to_string(this->opcode)) << "\n";
-	node_str << "instructions: " << this->instructions << "\n";
+	node_str << "opcode: 0x" << std::hex
+    << std::stoi(std::to_string(this->opcode)) << "\n";
 	node_str << "------------\n" << "\n";
 	Helper::write(Helper::classlist_filename, node_str.str());
 	// Recursively print children
-	if (this->next_nodes == nullptr)
-	{
-		return;
-	}
-	else
-	{
-		this->next_nodes->pretty_print();
-	}
+  for (auto const& node : this->next_nodes)
+    node->pretty_print();
 }
 
 void Node::dot_fmt_dump() const
 {
 	// Print graph description
-	auto constexpr tab_str = "  ";
-	std::stringstream dot_str;
-	dot_str << "digraph {\n";
-	dot_str << tab_str << "label=\"" << std::hex << this->baseAddr << "\"\n";
-	auto current_node = this;
-	while (current_node != nullptr)
-	{
-		dot_str << tab_str << "\"0x" << std::hex << current_node->baseAddr << "\"";
-		auto const current_node_optype = OpCodeClassifier::get_opcode_type(current_node->opcode);
-		dot_str << "[label=\"" << std::hex << OpCodeTypeToStrMap.find(current_node_optype)->second << "\"];\n";
-		auto const next_node = current_node->next_nodes.get();
-		if (next_node != nullptr)
-		{
-			dot_str << tab_str << "\"0x" << std::hex << current_node->baseAddr << "\"";
-			dot_str << " -> ";
-			dot_str << "\"0x" << std::hex << next_node->baseAddr << "\";\n";
-		}
-		current_node = next_node;
-	}
-	dot_str << "}\n";
-	printf("%s", dot_str.str().c_str());
-	//Helper::write(Helper::graph_filename, dot_str.str());
+  auto current_node = this;
+	std::stringstream dot_ss;
+  dot_ss << get_dot_header(*current_node);
+
+  dot_ss << dot_fmt_node(*current_node);
+
+  dot_ss << get_dot_footer();
+	tc_print(dot_ss.str());
 }
 
-void Node::copy(Node const& node)
+int Node::count_node() const
 {
-	this->baseAddr = node.baseAddr;
-	this->opcode = node.opcode;
-	this->instructions = node.instructions;
+  auto ret = 1;
+  for (auto const& child_node : this->next_nodes)
+    ret += child_node->count_node();
+  return ret;
 }
 
-void append_node_to(Node& parent_node,
-        			Node const& child_node)
+std::string dot_fmt_node(NodeSPtr const node)
 {
-	auto new_child_ptr = std::unique_ptr<Node>(new Node(child_node.baseAddr, 
-			                      						child_node.opcode,
-													    child_node.instructions));
-	if (parent_node.baseAddr == -1)
-	{
-		parent_node.copy(child_node);
-		return;
-	}
-		
-	if (parent_node.next_nodes == nullptr)
-		parent_node.next_nodes = std::move(new_child_ptr);
-	else
-		append_node_to(*parent_node.next_nodes.get(),
-					   child_node);
+  std::stringstream dot_ss;
+  // Current Node
+  dot_ss << tab_str << "\""
+    << get_formated_hex(node->baseAddr) << "\"";
+  dot_ss << "[label=\""
+    << OpCodeTypeToStrMap.find(node->opcode_type)->second << "\"];\n";
+  // Child fmt
+  for (auto const& child_node : node->next_nodes)
+  {
+    // Link Child node to parent node
+    dot_ss << tab_str << "\"" << get_formated_hex(node->baseAddr) << "\"";
+    dot_ss << " -> ";
+    dot_ss << "\"" << get_formated_hex(child_node->baseAddr) << "\";\n";
+    // Recursive call
+    dot_ss << dot_fmt_node(child_node);
+  }
+
+  return dot_ss.str();
+}
+
+std::string dot_fmt_node(Node const& node)
+{
+  std::stringstream dot_ss;
+  // Current Node
+  dot_ss << tab_str << "\""
+    << get_formated_hex(node.baseAddr) << "\"";
+  dot_ss << "[label=\""
+    << OpCodeTypeToStrMap.find(node.opcode_type)->second << "\"];\n";
+  // Child fmt
+  for (auto const& child_node : node.next_nodes)
+  {
+    // Link Child node to parent node
+    dot_ss << tab_str << "\"" << get_formated_hex(node.baseAddr) << "\"";
+    dot_ss << " -> ";
+    dot_ss << "\"" << get_formated_hex(child_node->baseAddr) << "\";\n";
+    // Recursive call
+    dot_ss << dot_fmt_node(child_node);
+  }
+
+  return dot_ss.str();
+}
+
+namespace
+{
+  bool is_cluster_end_opcodetype(OpCodeType const& opcodetype)
+  {
+    return (opcodetype == OpCodeType::IF
+      || opcodetype == OpCodeType::JMP
+      || opcodetype == OpCodeType::RET);
+  }
+
+  std::map<uint32_t, std::vector<NodeSPtr>> get_node_clusters(
+    std::vector<NodeSPtr> const& nodeptr_vector)
+  {
+    using namespace TreeConstructor;
+    std::queue<NodeSPtr> node_queue;
+    for (auto const& elem : nodeptr_vector)
+      node_queue.push(elem);
+
+    std::map<uint32_t, std::vector<NodeSPtr>> ret;
+    do
+    {
+      std::vector<NodeSPtr> cluster;
+      do
+      {
+        // Link new node to cluster
+        if (!cluster.empty())
+          cluster.back()->next_nodes.push_back(node_queue.front());
+        // Add new node to cluster
+        cluster.push_back(node_queue.front());
+        node_queue.pop();
+        if (node_queue.empty()) break;
+      } while (!is_cluster_end_opcodetype(cluster.back()->opcode_type));
+
+      // Cleanup inner loop
+      ret.emplace(cluster.front()->intern_offset, cluster);
+    } while (!node_queue.empty());
+    return ret;
+  }
+
+  void process_if_clusters(
+    std::map<uint32_t, std::vector<NodeSPtr>> const& cluster_map)
+  {
+    for (auto const& elem : cluster_map)
+    {
+      if (elem.second.back()->opcode_type == OpCodeType::IF)
+      {
+        // Append true branch
+        auto true_branch_it = 
+          cluster_map.find(elem.second.back()->intern_offset
+            + elem.second.back()->size);
+        if (true_branch_it != std::end(cluster_map))
+          elem.second.back()->next_nodes.push_back(
+              true_branch_it->second.front());
+        // Append false branch
+        auto false_branch_it =
+          cluster_map.find(elem.second.back()->opt_arg_offset);
+        if (false_branch_it != std::end(cluster_map))
+          elem.second.back()->next_nodes.push_back(
+              false_branch_it->second.front());
+      }
+    }
+  }
+}
+
+NodeSPtr construct_node_from_vec(std::vector<NodeSPtr> const &nodeptr_vector)
+{
+  auto cluster_map = get_node_clusters(nodeptr_vector);
+  process_if_clusters(cluster_map);
+  return cluster_map[0x0000].front();
 }
 
 }
+
