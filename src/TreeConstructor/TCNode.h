@@ -34,7 +34,8 @@ struct Node
   int count_node() const;
 };
 
-std::string dot_fmt_node(Node const& node);
+std::string dot_traversal(Node const& node);
+std::string dot_fmt_node(NodeSPtr const node);
 
 NodeSPtr construct_node_from_vec(std::vector<NodeSPtr> const &nodeptr_vector);
 }

@@ -528,39 +528,8 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
 	std::string buff_str;
   uint32_t arg_offset = 0;
 
-	std::stringstream node_insns;
-
   const u2* insns = pCode->insns;
   int i;
-
-  if (pDecInsn->opCode == OP_NOP) {
-    u2 instr = get2LE((const u1 *)&insns[insnIdx]);
-    if (instr == kPackedSwitchSignature) {
-      // Modified Tool
-      tc_str_format(buff_str, "%04x: packed-switch-data (%d units)", insnIdx,
-                    insnWidth);
-      
-    } else if (instr == kSparseSwitchSignature) {
-      // Modified Tool
-      tc_str_format(buff_str, "%04x: sparse-switch-data (%d units)", insnIdx,
-                    insnWidth);
-      
-    } else if (instr == kArrayDataSignature) {
-      // Modified Tool
-      tc_str_format(buff_str, "%04x: array-data (%d units)", insnIdx,
-                    insnWidth);
-      
-    } else {
-      // Modified Tool
-      tc_str_format(buff_str, "%04x: nop // spacer", insnIdx);
-      
-    }
-  } else {
-    // Modified Tool
-    tc_str_format(buff_str, "%04x: %s", insnIdx,
-                  getOpcodeName(pDecInsn->opCode));
-    
-  }
 
   switch (dexGetInstrFormat(gInstrFormat, pDecInsn->opCode)) {
   case kFmt10x: // op
@@ -569,7 +538,6 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
   {
     // Modified Tool
     tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
-    
     break;
     } 
     case kFmt11n:        // op vA, #+B
@@ -577,14 +545,12 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, #int %d // #%x", pDecInsn->vA,
                     (s4)pDecInsn->vB, (u1)pDecInsn->vB);
-      
       break;
     }
     case kFmt11x: // op vAA
     {
       // Modified Tool
       tc_str_format(buff_str, " v%d", pDecInsn->vA);
-      
       break;
     }
     case kFmt10t:        // op +AA
@@ -594,7 +560,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " %04x // %c%04x", insnIdx + targ,
                     (targ < 0) ? '-' : '+', (targ < 0) ? -targ : targ);
-      
+      arg_offset = insnIdx + targ;
       break;
     }
     case kFmt22x: // op vAA, vBBBB
@@ -611,7 +577,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       tc_str_format(buff_str, " v%d, %04x // %c%04x", pDecInsn->vA,
                     insnIdx + targ, (targ < 0) ? '-' : '+',
                     (targ < 0) ? -targ : targ);
-      
+      arg_offset = insnIdx + targ;
       break;
     }
     case kFmt21s: // op vAA, #+BBBB
@@ -619,7 +585,6 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, #int %d // #%x", pDecInsn->vA,
                     (s4)pDecInsn->vB, (u2)pDecInsn->vB);
-      
       break;
     }
     case kFmt21h: // op vAA, #+BBBB0000[00000000]
@@ -676,7 +641,6 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, v%d, v%d", pDecInsn->vA, pDecInsn->vB,
                     pDecInsn->vC);
-      
       break;
     }
     case kFmt22b: // op vAA, vBB, #+CC
@@ -684,7 +648,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, v%d, #int %d // #%02x", pDecInsn->vA,
                     pDecInsn->vB, (s4)pDecInsn->vC, (u1)pDecInsn->vC);
-      
+      arg_offset = (s4)pDecInsn->vC;
       break;
     }
     case kFmt22t: // op vA, vB, +CCCC
@@ -702,7 +666,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, v%d, #int %d // #%04x", pDecInsn->vA,
                     pDecInsn->vB, (s4)pDecInsn->vC, (u2)pDecInsn->vC);
-      
+      arg_offset = (s4)pDecInsn->vC;
       break;
     }
     case kFmt22c: // op vA, vB, thing@CCCC
@@ -714,19 +678,16 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
           tc_str_format(buff_str, " v%d, v%d, %s.%s:%s // field@%04x",
                         pDecInsn->vA, pDecInsn->vB, fieldInfo.classDescriptor,
                         fieldInfo.name, fieldInfo.signature, pDecInsn->vC);
-          
         } else {
           // Modified Tool
           tc_str_format(buff_str, " v%d, v%d, ??? // field@%04x", pDecInsn->vA,
                         pDecInsn->vB, pDecInsn->vC);
-          
         }
       } else {
         // Modified Tool
         tc_str_format(buff_str, " v%d, v%d, %s // class@%04x", pDecInsn->vA,
                       pDecInsn->vB, getClassDescriptor(pDexFile, pDecInsn->vC),
-                      pDecInsn->vC);
-        
+                      pDecInsn->vC); 
       }
       break;
     }
@@ -735,14 +696,13 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, v%d, [obj+%04x]", pDecInsn->vA,
                     pDecInsn->vB, pDecInsn->vC);
-      
+      arg_offset = pDecInsn->vC;
       break;
     }
     case kFmt30t:
     {
       // Modified Tool
       tc_str_format(buff_str, " #%08x", pDecInsn->vA);
-      
       break;
     }
     case kFmt31i: // op vAA, #+BBBBBBBB
@@ -756,7 +716,6 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, #float %f // #%08x", pDecInsn->vA, conv.f,
                     pDecInsn->vB);
-      
       break;
     }
     case kFmt31c: // op vAA, thing@BBBBBBBB
@@ -764,7 +723,6 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, \"%s\" // string@%08x", pDecInsn->vA,
                     dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
-      
       break;
     }
     case kFmt31t: // op vAA, offset +BBBBBBBB
@@ -772,14 +730,12 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, %08x // +%08x", pDecInsn->vA,
                     insnIdx + pDecInsn->vB, pDecInsn->vB);
-      
       break;
     }
     case kFmt32x: // op vAAAA, vBBBB
     {
       // Modified Tool
-      tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
-      
+      tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB); 
       break;
     }
     case kFmt35c: // op vB, {vD, vE, vF, vG, vA}, thing@CCCC
@@ -789,11 +745,9 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
         if (i == 0) {
           // Modified Tool
           tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
-          node_insns << " {" << buff_str;
         } else {
           // Modified Tool
           tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
-          node_insns << " {" << buff_str;
         }
       }
       if (pDecInsn->opCode == OP_FILLED_NEW_ARRAY) {
@@ -808,11 +762,9 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
           tc_str_format(buff_str, "}, %s.%s:%s // method@%04x",
                         methInfo.classDescriptor, methInfo.name,
                         methInfo.signature, pDecInsn->vB);
-          
         } else {
           // Modified Tool
           tc_str_format(buff_str, "}, ??? // method@%04x", pDecInsn->vB);
-          
         }
       }
       break;
@@ -824,11 +776,9 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
         if (i == 0) {
           // Modified Tool
           tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
-          node_insns << " {" << buff_str;
         } else {
           // Modified Tool
           tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
-          node_insns << " {" << buff_str;
         }
       }
       // Modified Tool
@@ -884,11 +834,9 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
         if (i == 0) {
           // Modified Tool
           tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
-          node_insns << " {" << buff_str;
         } else {
           // Modified Tool
           tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
-          node_insns << " {" << buff_str;
         }
       }
       // Modified Tool
@@ -903,17 +851,14 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
         if (i == 0) {
           // Modified Tool
           tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
-          node_insns << " {" << buff_str;
         } else {
           // Modified Tool
           tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
-          node_insns << " {" << buff_str;
         }
       }
       // Modified Tool
       tc_str_format(buff_str, "}, [%04x] // inline #%04x", pDecInsn->vB,
                     pDecInsn->vB);
-      
       break;
     } 
     case kFmt3inline: // [opt] inline invoke
@@ -922,17 +867,14 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
         if (i == 0) {
           // Modified Tool
           tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
-          node_insns << " {" << buff_str;
         } else {
           // Modified Tool
           tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
-          node_insns << " {" << buff_str;
         }
       }
       // Modified Tool
       tc_str_format(buff_str, "}, [%04x] // inline #%04x", pDecInsn->vB,
                     pDecInsn->vB);
-      
       break;
     } 
     case kFmt51l: // op vAA, #+BBBBBBBBBBBBBBBB
@@ -946,7 +888,6 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, #double %f // #%016llx", pDecInsn->vA,
                     conv.d, pDecInsn->vB_wide);
-      
       break;
     } 
     case kFmtUnknown:
@@ -955,7 +896,6 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
     {
       // Modified Tool
       tc_str_format(buff_str, " ???");
-      
       break;
     }
     }

@@ -2,6 +2,7 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <utility>
 
 #include <TreeConstructor/TCOutputHelper.h>
 #include <TreeConstructor/TCNode.h>
@@ -80,7 +81,7 @@ void Node::dot_fmt_dump() const
 	std::stringstream dot_ss;
   dot_ss << get_dot_header(*current_node);
 
-  dot_ss << dot_fmt_node(*current_node);
+  dot_ss << dot_traversal(*current_node);
 
   dot_ss << get_dot_footer();
 	tc_print(dot_ss.str());
@@ -92,6 +93,95 @@ int Node::count_node() const
   for (auto const& child_node : this->next_nodes)
     ret += child_node->count_node();
   return ret;
+}
+
+std::string dot_traversal(Node const& node)
+{
+  std::stringstream dot_ss;
+  std::vector<NodeSPtr> visiting_nodeptr_stack;
+  std::vector<NodeSPtr> visited_nodeptr_vec;
+  // Lonely Nodes
+  if (node.next_nodes.empty())
+    return dot_fmt_node(std::make_shared<Node>(node));
+  // Step 1: Initialized current node as root
+  NodeSPtr current_node = std::make_shared<Node>(node);
+  // Step 2: Push current node to S 
+  // and set current = current->left until no child
+  do
+  {
+    do
+    {
+      auto const it = std::find(
+        visiting_nodeptr_stack.begin(),
+        visiting_nodeptr_stack.end(),
+        current_node
+      );
+      if (it == std::end(visiting_nodeptr_stack))
+      {
+        visiting_nodeptr_stack.push_back(current_node);
+        current_node = current_node->next_nodes[0];
+      }
+      else
+      {
+        break;
+      }
+    } while (!current_node->next_nodes.empty());
+
+    auto const it = std::find(
+      visiting_nodeptr_stack.begin(),
+      visiting_nodeptr_stack.end(),
+      current_node
+    );
+    if (it == std::end(visiting_nodeptr_stack))
+      visiting_nodeptr_stack.push_back(current_node);
+    
+    // Step 3: If no childs and stack is not empty
+    // a) Pop the top item from the stack
+    // b) Do visitor operation, and set current_node = popped_item->right
+    // c) Go to Step 2
+    if (!visiting_nodeptr_stack.empty())
+    {
+      while (!visiting_nodeptr_stack.empty()
+        && visiting_nodeptr_stack.back()->next_nodes.size() < 2)
+      {
+        auto const popped_node = visiting_nodeptr_stack.back();
+        visiting_nodeptr_stack.pop_back();
+        auto const it = std::find(
+          visited_nodeptr_vec.begin(),
+          visited_nodeptr_vec.end(),
+          popped_node
+        );
+        if (it == std::end(visited_nodeptr_vec))
+        {
+          dot_ss << dot_fmt_node(popped_node); // Visitor operation
+          visited_nodeptr_vec.push_back(popped_node);
+        }
+      }
+      if (!visiting_nodeptr_stack.empty())
+      {
+        auto const it = std::find(
+          visited_nodeptr_vec.begin(),
+          visited_nodeptr_vec.end(),
+          visiting_nodeptr_stack.back()->next_nodes[1]
+        );
+        if (it == std::end(visited_nodeptr_vec))
+        {
+          current_node = visiting_nodeptr_stack.back()->next_nodes[1];
+        }
+        else
+        {
+          do
+          {
+            auto const popped_node = visiting_nodeptr_stack.back();
+            visiting_nodeptr_stack.pop_back();
+            dot_ss << dot_fmt_node(popped_node); // Visitor operation
+          } while (!visiting_nodeptr_stack.empty());
+        }
+      }
+       
+    }
+  } while (!visiting_nodeptr_stack.empty());
+  return dot_ss.str();
 }
 
 std::string dot_fmt_node(NodeSPtr const node)
@@ -109,32 +199,7 @@ std::string dot_fmt_node(NodeSPtr const node)
     dot_ss << tab_str << "\"" << get_formated_hex(node->baseAddr) << "\"";
     dot_ss << " -> ";
     dot_ss << "\"" << get_formated_hex(child_node->baseAddr) << "\";\n";
-    // Recursive call
-    dot_ss << dot_fmt_node(child_node);
   }
-
-  return dot_ss.str();
-}
-
-std::string dot_fmt_node(Node const& node)
-{
-  std::stringstream dot_ss;
-  // Current Node
-  dot_ss << tab_str << "\""
-    << get_formated_hex(node.baseAddr) << "\"";
-  dot_ss << "[label=\""
-    << OpCodeTypeToStrMap.find(node.opcode_type)->second << "\"];\n";
-  // Child fmt
-  for (auto const& child_node : node.next_nodes)
-  {
-    // Link Child node to parent node
-    dot_ss << tab_str << "\"" << get_formated_hex(node.baseAddr) << "\"";
-    dot_ss << " -> ";
-    dot_ss << "\"" << get_formated_hex(child_node->baseAddr) << "\";\n";
-    // Recursive call
-    dot_ss << dot_fmt_node(child_node);
-  }
-
   return dot_ss.str();
 }
 
@@ -184,18 +249,63 @@ namespace
       if (elem.second.back()->opcode_type == OpCodeType::IF)
       {
         // Append true branch
-        auto true_branch_it = 
+        auto const true_branch_it = 
           cluster_map.find(elem.second.back()->intern_offset
             + elem.second.back()->size);
         if (true_branch_it != std::end(cluster_map))
           elem.second.back()->next_nodes.push_back(
               true_branch_it->second.front());
         // Append false branch
-        auto false_branch_it =
+        auto const false_branch_it =
           cluster_map.find(elem.second.back()->opt_arg_offset);
         if (false_branch_it != std::end(cluster_map))
+        {
           elem.second.back()->next_nodes.push_back(
-              false_branch_it->second.front());
+            false_branch_it->second.front());
+        }
+      }
+    }
+  }
+
+  void process_jmp_clusters(
+    std::map < uint32_t, std::vector<NodeSPtr>> const& cluster_map)
+  {
+    typedef uint32_t Offset;
+    std::vector<std::pair<NodeSPtr, Offset>> jmp_vector;
+    for (auto const& cluster : cluster_map)
+    {
+      auto const last_nodeptr = cluster.second.back();
+      // FIXME
+      if (last_nodeptr->opcode == OpCode::OP_SPARSE_SWITCH
+        || last_nodeptr->opcode == OpCode::OP_PACKED_SWITCH)
+      {
+        // Switch link implementation is not trivial
+        break;
+      }
+
+      if (last_nodeptr->opcode_type == OpCodeType::JMP)
+      {
+        jmp_vector.push_back(
+          std::make_pair(last_nodeptr, last_nodeptr->opt_arg_offset));
+      }
+    }
+    // Link all jmp to target
+    for (auto const& elem : jmp_vector)
+    {
+      for (auto const& cluster : cluster_map)
+      {
+        auto cluster_vector = cluster.second;
+        auto const equal_it = 
+          std::find_if(cluster_vector.begin(), cluster_vector.end(),
+            [&](NodeSPtr const& node) {
+              return elem.second == node->intern_offset;
+            });
+        if (equal_it != std::end(cluster_vector))
+        {
+          elem.first->next_nodes.push_back(
+            cluster_vector[equal_it - cluster_vector.begin()]);
+          break;
+        }
       }
     }
   }
@@ -205,6 +315,7 @@ NodeSPtr construct_node_from_vec(std::vector<NodeSPtr> const &nodeptr_vector)
 {
   auto cluster_map = get_node_clusters(nodeptr_vector);
   process_if_clusters(cluster_map);
+  process_jmp_clusters(cluster_map);
   return cluster_map[0x0000].front();
 }
 
