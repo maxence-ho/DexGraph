@@ -3,6 +3,7 @@
 #include <sstream>
 #include <string>
 #include <utility>
+#include <assert.h>
 
 #include <TreeConstructor/TCOutputHelper.h>
 #include <TreeConstructor/TCNode.h>
@@ -95,31 +96,46 @@ int Node::count_node() const
   return ret;
 }
 
+namespace
+{
+  template<typename T>
+  bool find(std::vector<T> vec, T value)
+  {
+    return std::find(vec.begin(), vec.end(), value) != std::end(vec);
+  }
+
+  bool are_nodes_visited(std::vector<TreeConstructor::NodeSPtr> visited_nodes,
+    std::vector<TreeConstructor::NodeSPtr> next_nodes)
+  {
+    auto ret = true;
+    for (auto const& nodeptr : next_nodes)
+      ret = ret && find(visited_nodes, nodeptr);
+    return ret;
+  }
+}
+
 std::string dot_traversal(Node const& node)
 {
   std::stringstream dot_ss;
   std::vector<NodeSPtr> visiting_nodeptr_stack;
   std::vector<NodeSPtr> visited_nodeptr_vec;
-  // Lonely Nodes
-  if (node.next_nodes.empty())
-    return dot_fmt_node(std::make_shared<Node>(node));
   // Step 1: Initialized current node as root
   NodeSPtr current_node = std::make_shared<Node>(node);
   // Step 2: Push current node to S 
   // and set current = current->left until no child
   do
   {
+    // Lonely Nodes
+    if (current_node->next_nodes.empty())
+      break;
     do
     {
-      auto const it = std::find(
-        visiting_nodeptr_stack.begin(),
-        visiting_nodeptr_stack.end(),
-        current_node
-      );
-      if (it == std::end(visiting_nodeptr_stack))
+      if (!find<NodeSPtr>(visiting_nodeptr_stack, current_node))
       {
         visiting_nodeptr_stack.push_back(current_node);
-        current_node = current_node->next_nodes[0];
+        auto const new_current_node = current_node->next_nodes[0];
+        if (!find<NodeSPtr>(visited_nodeptr_vec, new_current_node))
+          current_node = new_current_node;
       }
       else
       {
@@ -127,60 +143,46 @@ std::string dot_traversal(Node const& node)
       }
     } while (!current_node->next_nodes.empty());
 
-    auto const it = std::find(
-      visiting_nodeptr_stack.begin(),
-      visiting_nodeptr_stack.end(),
-      current_node
-    );
-    if (it == std::end(visiting_nodeptr_stack))
+    if (!find<NodeSPtr>(visiting_nodeptr_stack, current_node))
       visiting_nodeptr_stack.push_back(current_node);
     
     // Step 3: If no childs and stack is not empty
     // a) Pop the top item from the stack
     // b) Do visitor operation, and set current_node = popped_item->right
     // c) Go to Step 2
+    while (!visiting_nodeptr_stack.empty()
+      && visiting_nodeptr_stack.back()->next_nodes.size() < 2)
+    {
+      auto const popped_node = visiting_nodeptr_stack.back();
+      visiting_nodeptr_stack.pop_back();
+      if (!find<NodeSPtr>(visited_nodeptr_vec, popped_node))
+      {
+        dot_ss << dot_fmt_node(popped_node); // Visitor operation
+        visited_nodeptr_vec.push_back(popped_node);
+      }
+    }
     if (!visiting_nodeptr_stack.empty())
     {
-      while (!visiting_nodeptr_stack.empty()
-        && visiting_nodeptr_stack.back()->next_nodes.size() < 2)
+      auto const right_node = visiting_nodeptr_stack.back()->next_nodes[1];
+      if (!find<NodeSPtr>(visited_nodeptr_vec, right_node))
+      {
+        current_node = right_node;
+      }
+      else
       {
         auto const popped_node = visiting_nodeptr_stack.back();
         visiting_nodeptr_stack.pop_back();
-        auto const it = std::find(
-          visited_nodeptr_vec.begin(),
-          visited_nodeptr_vec.end(),
-          popped_node
-        );
-        if (it == std::end(visited_nodeptr_vec))
+        if (!find<NodeSPtr>(visited_nodeptr_vec, popped_node))
         {
           dot_ss << dot_fmt_node(popped_node); // Visitor operation
           visited_nodeptr_vec.push_back(popped_node);
         }
+        if (!visiting_nodeptr_stack.empty())
+          current_node = visiting_nodeptr_stack.back();
       }
-      if (!visiting_nodeptr_stack.empty())
-      {
-        auto const it = std::find(
-          visited_nodeptr_vec.begin(),
-          visited_nodeptr_vec.end(),
-          visiting_nodeptr_stack.back()->next_nodes[1]
-        );
-        if (it == std::end(visited_nodeptr_vec))
-        {
-          current_node = visiting_nodeptr_stack.back()->next_nodes[1];
-        }
-        else
-        {
-          do
-          {
-            auto const popped_node = visiting_nodeptr_stack.back();
-            visiting_nodeptr_stack.pop_back();
-            dot_ss << dot_fmt_node(popped_node); // Visitor operation
-          } while (!visiting_nodeptr_stack.empty());
-        }
-      }
-       
-    }
+    }  
   } while (!visiting_nodeptr_stack.empty());
+  assert(visiting_nodeptr_stack.empty());
   return dot_ss.str();
 }
 
