@@ -104,13 +104,80 @@ namespace
     return std::find(vec.begin(), vec.end(), value) != std::end(vec);
   }
 
-  bool are_nodes_visited(std::vector<TreeConstructor::NodeSPtr> visited_nodes,
-    std::vector<TreeConstructor::NodeSPtr> next_nodes)
+  // Called in a loop to traverse the tree from current_node
+  // descending via the leftest node each time
+  // and adding it to visiting_tack iif node has not been visited yet
+  void left_traversal_stack(std::vector<NodeSPtr> & visiting_nodeptr_stack,
+                            std::vector<NodeSPtr> & visited_nodeptr_vec,
+                            NodeSPtr & current_node)
   {
-    auto ret = true;
-    for (auto const& nodeptr : next_nodes)
-      ret = ret && find(visited_nodes, nodeptr);
-    return ret;
+    do
+    {
+      if (!find<NodeSPtr>(visiting_nodeptr_stack, current_node))
+      {
+        visiting_nodeptr_stack.push_back(current_node);
+        auto const new_current_node = current_node->next_nodes[0];
+        if (!find<NodeSPtr>(visited_nodeptr_vec, new_current_node))
+          current_node = new_current_node;
+      }
+      else
+      {
+        break;
+      }
+    } while (!current_node->next_nodes.empty());
+    // Finally add leaf node
+    if (!find<NodeSPtr>(visiting_nodeptr_stack, current_node))
+      visiting_nodeptr_stack.push_back(current_node);
+  }
+
+  // Called in a loop to destack all the nodes in visiting_stack
+  // with only 1 next_nodes
+  void destack_and_dump_node(std::vector<NodeSPtr> & visiting_nodeptr_stack,
+                             std::vector<NodeSPtr> & visited_nodeptr_vec, 
+                             std::stringstream & dot_ss)
+  {
+    auto const popped_node = visiting_nodeptr_stack.back();
+    visiting_nodeptr_stack.pop_back();
+    if (!find<NodeSPtr>(visited_nodeptr_vec, popped_node))
+    {
+      dot_ss << dot_fmt_node(popped_node); // Visitor operation
+      visited_nodeptr_vec.push_back(popped_node);
+    }
+  }
+
+  // Called when all the next_nodes of visiting_stack.back()
+  // are already visited => Destack and move cursor up the stack
+  void process_cuttedfeet_node(std::vector<NodeSPtr> & visiting_nodeptr_stack,
+                               std::vector<NodeSPtr> & visited_nodeptr_vec,
+                               std::stringstream & dot_ss,
+                               NodeSPtr & current_node)
+  {
+    destack_and_dump_node(visiting_nodeptr_stack,
+                          visited_nodeptr_vec,
+                          dot_ss);
+    // Move current_node cursor
+    if (!visiting_nodeptr_stack.empty())
+      current_node = visiting_nodeptr_stack.back();
+  }
+
+  // Called when destacking stop
+  // ie. visiting_stack.back() has multiple next_nodes
+  void process_multiplefeet_node(std::vector<NodeSPtr> & visiting_nodeptr_stack,
+                                 std::vector<NodeSPtr> & visited_nodeptr_vec,
+                                 std::stringstream & dot_ss,
+                                 NodeSPtr & current_node)
+  {
+   
+    {
+      auto const right_node = visiting_nodeptr_stack.back()->next_nodes[1];
+      if (!find<NodeSPtr>(visited_nodeptr_vec, right_node))
+        current_node = right_node;
+      else
+        process_cuttedfeet_node(visiting_nodeptr_stack,
+                                visited_nodeptr_vec,
+                                dot_ss,
+                                current_node);
+    }
   }
 }
 
@@ -128,23 +195,10 @@ std::string dot_traversal(Node const& node)
     // Lonely Nodes
     if (current_node->next_nodes.empty())
       break;
-    do
-    {
-      if (!find<NodeSPtr>(visiting_nodeptr_stack, current_node))
-      {
-        visiting_nodeptr_stack.push_back(current_node);
-        auto const new_current_node = current_node->next_nodes[0];
-        if (!find<NodeSPtr>(visited_nodeptr_vec, new_current_node))
-          current_node = new_current_node;
-      }
-      else
-      {
-        break;
-      }
-    } while (!current_node->next_nodes.empty());
-
-    if (!find<NodeSPtr>(visiting_nodeptr_stack, current_node))
-      visiting_nodeptr_stack.push_back(current_node);
+   
+    left_traversal_stack(visiting_nodeptr_stack, 
+                         visited_nodeptr_vec,
+                         current_node);
     
     // Step 3: If no childs and stack is not empty
     // a) Pop the top item from the stack
@@ -153,36 +207,20 @@ std::string dot_traversal(Node const& node)
     while (!visiting_nodeptr_stack.empty()
       && visiting_nodeptr_stack.back()->next_nodes.size() < 2)
     {
-      auto const popped_node = visiting_nodeptr_stack.back();
-      visiting_nodeptr_stack.pop_back();
-      if (!find<NodeSPtr>(visited_nodeptr_vec, popped_node))
-      {
-        dot_ss << dot_fmt_node(popped_node); // Visitor operation
-        visited_nodeptr_vec.push_back(popped_node);
-      }
+      destack_and_dump_node(visiting_nodeptr_stack,
+                            visited_nodeptr_vec,
+                            dot_ss);
     }
+
     if (!visiting_nodeptr_stack.empty())
     {
-      auto const right_node = visiting_nodeptr_stack.back()->next_nodes[1];
-      if (!find<NodeSPtr>(visited_nodeptr_vec, right_node))
-      {
-        current_node = right_node;
-      }
-      else
-      {
-        auto const popped_node = visiting_nodeptr_stack.back();
-        visiting_nodeptr_stack.pop_back();
-        if (!find<NodeSPtr>(visited_nodeptr_vec, popped_node))
-        {
-          dot_ss << dot_fmt_node(popped_node); // Visitor operation
-          visited_nodeptr_vec.push_back(popped_node);
-        }
-        if (!visiting_nodeptr_stack.empty())
-          current_node = visiting_nodeptr_stack.back();
-      }
-    }  
+      process_multiplefeet_node(visiting_nodeptr_stack,
+                                visited_nodeptr_vec,
+                                dot_ss,
+                                current_node);
+    }
+     
   } while (!visiting_nodeptr_stack.empty());
-  assert(visiting_nodeptr_stack.empty());
   return dot_ss.str();
 }
 
