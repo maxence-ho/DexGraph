@@ -7,6 +7,29 @@ include_directories(
   deps/zlib/
 )
 
+set ( HEADERS
+  include/Dexdump/OpCodeNames.h
+  include/TreeConstructor/OpcodeType.h
+  include/TreeConstructor/TCNode.h
+  include/TreeConstructor/TCOutputHelper.h
+  include/libdex/CmdUtils.h
+  include/libdex/DexCatch.h
+  include/libdex/DexClass.h
+  include/libdex/DexDataMap.h
+  include/libdex/DexFile.h
+  include/libdex/DexProto.h
+  include/libdex/InstrUtils.h
+  include/libdex/Leb128.h
+  include/libdex/OptInvocation.h
+  include/libdex/SysUtil.h
+  include/libdex/ZipArchive.h
+  include/libdex/sha1.h
+  include/other/inttypes.h
+  include/other/typeof.h
+  include/vm/Common.h
+  include/vm/DalvikVersion.h
+)
+
 set( SOURCES
   src/Dexdump/DexDump.cpp
   src/Dexdump/OpCodenames.cpp
@@ -29,6 +52,6 @@ set( SOURCES
   src/TreeConstructor/TCOutputHelper.cpp
 )
 
-add_executable(dexgraph ${SOURCES})
+add_executable(dexgraph ${SOURCES} ${HEADERS})
 target_link_libraries(dexgraph ${CMAKE_SOURCE_DIR}/deps/zlib/libz.a)
 
