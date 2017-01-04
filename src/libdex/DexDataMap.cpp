@@ -18,7 +18,7 @@
  * Verification-time map of data section items
  */
 
-#include "DexDataMap.h"
+#include <libdex/DexDataMap.h>
 //#include "safe_iop/safe_iop.h"
 #include <stdlib.h>
 #include <stddef.h>

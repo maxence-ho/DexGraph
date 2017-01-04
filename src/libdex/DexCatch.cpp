@@ -18,7 +18,7 @@
  * Functions for dealing with try-catch info.
  */
 
-#include "DexCatch.h"
+#include <libdex/DexCatch.h>
 
 /* Get the first handler offset for the given DexCode. 
  * It's not 0 because the handlers list is prefixed with its size

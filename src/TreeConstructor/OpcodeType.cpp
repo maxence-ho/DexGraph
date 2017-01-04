@@ -1,5 +1,6 @@
 #include <array>
 #include <algorithm>
+#include <string>
 
 #include <TreeConstructor/OpcodeType.h>
 
@@ -99,6 +100,20 @@ bool OpCodeClassifier::is_new(OpCode const & candidate)
           std::end(new_opcodes));
 }
 
+std::string OpCodeTypeToStr(OpCodeType const& opcodetype)
+{
+  switch (opcodetype)
+  {
+    case OpCodeType::SEQ: return "SEQ"; break;
+    case OpCodeType::IF: return "IF"; break;
+    case OpCodeType::CALL: return "CALL"; break;
+    case OpCodeType::NEW: return "NEW"; break;
+    case OpCodeType::JMP: return "JMP"; break;
+    case OpCodeType::THROW: return "THROW"; break;
+    case OpCodeType::SYSCALL: return "SYSCALL"; break;
+    case OpCodeType::RET: return "RET"; break;
+  }
+}
 
 OpCodeType OpCodeClassifier::get_opcode_type(OpCode const& opcode)
 {

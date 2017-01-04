@@ -231,7 +231,7 @@ std::string dot_fmt_node(NodeSPtr const node)
   dot_ss << tab_str << "\""
     << get_formated_hex(node->baseAddr) << "\"";
   dot_ss << "[label=\""
-    << OpCodeTypeToStrMap.find(node->opcode_type)->second << "\"];\n";
+    << OpCodeTypeToStr(node->opcode_type) << "\"];\n";
   // Child fmt
   for (auto const& child_node : node->next_nodes)
   {

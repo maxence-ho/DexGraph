@@ -19,13 +19,13 @@
 
 #define _DEX_GEN_INLINES
 
-#include "DexFile.h"
+#include <libdex/DexFile.h>
 
-#include "DexCatch.h"
-#include "DexClass.h"
-#include "DexDataMap.h"
-#include "DexProto.h"
-#include "InstrUtils.h"
-#include "Leb128.h"
-#include "ZipArchive.h"
+#include <libdex/DexCatch.h>
+#include <libdex/DexClass.h>
+#include <libdex/DexDataMap.h>
+#include <libdex/DexProto.h>
+#include <libdex/InstrUtils.h>
+#include <libdex/Leb128.h>
+#include <libdex/ZipArchive.h>
 

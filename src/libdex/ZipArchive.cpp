@@ -16,7 +16,7 @@
 /*
  * Read-only access to Zip archives, with minimal heap allocation.
  */
-#include "ZipArchive.h"
+#include <libdex/ZipArchive.h>
 
 #include <zlib.h>
 
@@ -24,8 +24,6 @@
 #include <string.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <io.h>
-#include <stdio.h>
 
 typedef long ssize_t;
 
@@ -355,7 +353,7 @@ void dexZipCloseArchive(ZipArchive* pArchive)
     LOGV("Closing archive %p\n", pArchive);
 
     if (pArchive->mFd >= 0)
-        close(pArchive->mFd);
+      close(pArchive->mFd);
 
     sysReleaseShmem(&pArchive->mMap);
 

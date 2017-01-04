@@ -79,7 +79,7 @@ A million repetitions of "a"
 
 /*#define CMDLINE        * include main() and file processing */
 
-#include "sha1.h"
+#include <libdex/sha1.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -90,10 +90,11 @@ A million repetitions of "a"
                needed for Win32, but chokes Linux - MPJ */
 #define X_LITTLE_ENDIAN /* This should be #define'd if true.*/
 #else
-# include <stdlib.h>
+#include <unistd.h> 
+#include <stdlib.h>
 //# include <endian.h>
 
-#include "DexFile.h"    // want common byte ordering def
+#include <libdex/DexFile.h>    // want common byte ordering def
 
 # if __BYTE_ORDER == __LITTLE_ENDIAN
 #  define X_LITTLE_ENDIAN

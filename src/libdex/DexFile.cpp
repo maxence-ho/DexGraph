@@ -18,12 +18,12 @@
  * Access the contents of a .dex file.
  */
 
-#include "DexFile.h"
-#include "DexProto.h"
-#include "DexCatch.h"
-#include "Leb128.h"
-#include "sha1.h"
-#include "ZipArchive.h"
+#include <libdex/DexFile.h>
+#include <libdex/DexProto.h>
+#include <libdex/DexCatch.h>
+#include <libdex/Leb128.h>
+#include <libdex/sha1.h>
+#include <libdex/ZipArchive.h>
 
 #include <zlib.h>
 
@@ -1072,6 +1072,8 @@ void dexDecodeDebugInfo(
     u4 insnsSize = pCode->insnsSize;
     DexProto proto = { pDexFile, protoIdx };
 
+    u2 argReg = pCode->registersSize - pCode->insSize;
+
     memset(localInReg, 0, sizeof(LocalInfo) * pCode->registersSize);
 
     if (stream == NULL) {
@@ -1080,8 +1082,6 @@ void dexDecodeDebugInfo(
 
     line = readUnsignedLeb128(&stream);
     parametersSize = readUnsignedLeb128(&stream);
-
-    u2 argReg = pCode->registersSize - pCode->insSize;
 
     if ((accessFlags & ACC_STATIC) == 0) {
         /*

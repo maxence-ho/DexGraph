@@ -47,7 +47,6 @@
 #include <errno.h>
 #include <assert.h>
 #include <string>
-#include <windows.h>
 #include <memory>
 
 // Modified Tool
@@ -1196,7 +1195,7 @@ void dumpClass(DexFile* pDexFile, int idx, char** pLastPackage)
  */
 static inline const u1* align32(const u1* ptr)
 {
-    return (u1*) (((int) ptr + 3) & ~0x03);
+    return (u1*) (((intptr_t) ptr + 3) & ~0x03);
 }
 
 
@@ -1405,11 +1404,12 @@ int process(const char* fileName)
     bool mapped = false;
     int result = -1;
 
+    int flags = kDexParseVerifyChecksum;
+
     if (dexOpenAndMap(fileName, gOptions.tempFileName, &map, false) != 0)
         goto bail;
     mapped = true;
 
-    int flags = kDexParseVerifyChecksum;
     if (gOptions.ignoreBadChecksum)
         flags |= kDexParseContinueOnError;
 

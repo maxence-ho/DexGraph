@@ -16,24 +16,22 @@
 /*
  * Utility functions for managing an invocation of "dexopt".
  */
-#include "vm/DalvikVersion.h"
+#include <vm/DalvikVersion.h>
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <cstdio>
+#include <unistd.h>
 #include <fcntl.h>
-#include <direct.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <stdio.h>
+#include <sys/file.h>
 #include <errno.h>
-#include <string.h>
-#include <io.h>
 
 typedef long ssize_t;
-#define snprintf _snprintf
 
-#include "OptInvocation.h"
-#include "DexFile.h"
+#include <libdex/OptInvocation.h>
+#include <libdex/DexFile.h>
 
 static const char* kClassesDex = "classes.dex";
 
@@ -66,7 +64,7 @@ char* dexOptGenerateCacheFileName(const char* fileName, const char* subFileName)
          * should, e.g. if filename is "./out/whatever" it doesn't crunch
          * the leading "./" out, but it'll do.
          */
-        if (_getcwd(absoluteFile, kBufLen) == NULL) {
+        if (getcwd(absoluteFile, kBufLen) == NULL) {
             LOGE("Can't get CWD while opening jar file\n");
             return NULL;
         }
@@ -100,7 +98,7 @@ char* dexOptGenerateCacheFileName(const char* fileName, const char* subFileName)
     dataRoot = getenv("ANDROID_DATA");
     if (dataRoot == NULL)
         dataRoot = "/data";
-    snprintf(nameBuf, kBufLen, "%s/%s", dataRoot, kDexCachePath);
+    std::snprintf(nameBuf, kBufLen, "%s/%s", dataRoot, kDexCachePath);
 
     /* Tack on the file name for the actual cache file path.
      */

@@ -16,19 +16,15 @@
 /*
  * Some utility functions for use with command-line utilities.
  */
-#include "DexFile.h"
-#include "ZipArchive.h"
-#include "CmdUtils.h"
+#include <libdex/DexFile.h>
+#include <libdex/ZipArchive.h>
+#include <libdex/CmdUtils.h>
 
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <stdio.h>
-#include <io.h>
-#include <process.h>
-
-#define strcasecmp stricmp 
+#include <unistd.h>
 
 /*
  * Extract "classes.dex" from archive file.
@@ -54,7 +50,7 @@ UnzipToFileResult dexUnzipToFile(const char* zipFileName,
         goto bail;
     }
 
-    fd = open(outFileName, O_WRONLY | O_CREAT | O_EXCL | O_BINARY, 0600);
+    fd = open(outFileName, O_WRONLY | O_CREAT | O_EXCL, 0600);
     if (fd < 0) {
         fprintf(stderr, "Unable to create output file '%s': %s\n",
             outFileName, strerror(errno));

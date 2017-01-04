@@ -18,7 +18,7 @@
  * Functions for dealing with method prototypes
  */
 
-#include "DexProto.h"
+#include <libdex/DexProto.h>
 
 #include <stdlib.h>
 #include <string.h>

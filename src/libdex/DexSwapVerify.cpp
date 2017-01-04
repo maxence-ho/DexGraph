@@ -18,11 +18,11 @@
  * Byte-swapping and verification of dex files.
  */
 
-#include "DexFile.h"
-#include "DexClass.h"
-#include "DexDataMap.h"
-#include "DexProto.h"
-#include "Leb128.h"
+#include <libdex/DexFile.h>
+#include <libdex/DexClass.h>
+#include <libdex/DexDataMap.h>
+#include <libdex/DexProto.h>
+#include <libdex/Leb128.h>
 
 //#include "safe_iop/safe_iop.h"
 #include <zlib.h>
@@ -1827,7 +1827,7 @@ static void* swapCodeItem(const CheckState* state, void* ptr) {
     if (item->triesSize == 0) {
         ptr = insns;
     } else {
-        if ((((u4) insns) & 3) != 0) {
+        if ((((uintptr_t) insns) & 3) != 0) {
             // Four-byte alignment for the tries. Verify the spacer is a 0.
             if (*insns != 0) {
                 LOGE("Non-zero padding: 0x%x\n", (u4) *insns);

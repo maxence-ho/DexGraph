@@ -17,12 +17,12 @@
 /*
  * System utilities.
  */
-#include "DexFile.h"
-#include "SysUtil.h"
+#include <libdex/DexFile.h>
+#include <libdex/SysUtil.h>
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <io.h>
+#include <unistd.h>
 #include <string.h>
 
 #ifdef HAVE_POSIX_FILEMAP

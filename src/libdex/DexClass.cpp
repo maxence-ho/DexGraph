@@ -20,8 +20,8 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "DexClass.h"
-#include "Leb128.h"
+#include <libdex/DexClass.h>
+#include <libdex/Leb128.h>
 
 /* Helper for verification which reads and verifies a given number
  * of uleb128 values. */

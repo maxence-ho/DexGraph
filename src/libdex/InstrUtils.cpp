@@ -17,7 +17,7 @@
 /*
  * Dalvik instruction utility functions.
  */
-#include "InstrUtils.h"
+#include <libdex/InstrUtils.h>
 
 #include <stdlib.h>
 
