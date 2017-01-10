@@ -525,7 +525,8 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
 	// Modified Tool
 	auto const margin_str = std::string(4, ' ');
 	std::string buff_str;
-  uint32_t arg_offset = 0;
+  std::vector<uint32_t> arg_offset;
+  uint32_t payload_offset = 0;
 
   const u2* insns = pCode->insns;
   int i;
@@ -559,7 +560,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " %04x // %c%04x", insnIdx + targ,
                     (targ < 0) ? '-' : '+', (targ < 0) ? -targ : targ);
-      arg_offset = insnIdx + targ;
+      arg_offset.push_back(insnIdx + targ);
       break;
     }
     case kFmt22x: // op vAA, vBBBB
@@ -576,7 +577,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       tc_str_format(buff_str, " v%d, %04x // %c%04x", pDecInsn->vA,
                     insnIdx + targ, (targ < 0) ? '-' : '+',
                     (targ < 0) ? -targ : targ);
-      arg_offset = insnIdx + targ;
+      arg_offset.push_back(insnIdx + targ);
       break;
     }
     case kFmt21s: // op vAA, #+BBBB
@@ -647,7 +648,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, v%d, #int %d // #%02x", pDecInsn->vA,
                     pDecInsn->vB, (s4)pDecInsn->vC, (u1)pDecInsn->vC);
-      arg_offset = (s4)pDecInsn->vC;
+      arg_offset.push_back((s4)pDecInsn->vC);
       break;
     }
     case kFmt22t: // op vA, vB, +CCCC
@@ -657,7 +658,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       tc_str_format(buff_str, " v%d, v%d, %04x // %c%04x", pDecInsn->vA,
                     pDecInsn->vB, insnIdx + targ, (targ < 0) ? '-' : '+',
                     (targ < 0) ? -targ : targ);
-      arg_offset = insnIdx + targ;
+      arg_offset.push_back(insnIdx + targ);
       break;
     }
     case kFmt22s: // op vA, vB, #+CCCC
@@ -665,7 +666,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, v%d, #int %d // #%04x", pDecInsn->vA,
                     pDecInsn->vB, (s4)pDecInsn->vC, (u2)pDecInsn->vC);
-      arg_offset = (s4)pDecInsn->vC;
+      arg_offset.push_back((s4)pDecInsn->vC);
       break;
     }
     case kFmt22c: // op vA, vB, thing@CCCC
@@ -695,7 +696,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, v%d, [obj+%04x]", pDecInsn->vA,
                     pDecInsn->vB, pDecInsn->vC);
-      arg_offset = pDecInsn->vC;
+      arg_offset.push_back(pDecInsn->vC);
       break;
     }
     case kFmt30t:
@@ -729,6 +730,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       // Modified Tool
       tc_str_format(buff_str, " v%d, %08x // +%08x", pDecInsn->vA,
                     insnIdx + pDecInsn->vB, pDecInsn->vB);
+      payload_offset = insnIdx + pDecInsn->vB;
       break;
     }
     case kFmt32x: // op vAAAA, vBBBB
@@ -898,13 +900,43 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       break;
     }
     }
+   
+    // Get relevant addresses
+    intptr_t const method_base_addr = ((u1*)insns - pDexFile->baseAddr) + insnIdx * 2;
+    // Get Instruction size
+    auto const instr_size = insnWidth;
+    // Get OpCode
+    auto const instr_opcode = pDecInsn->opCode;
+    // Get Offset (relative to method base address)
+    int const internal_offset = insnIdx;
+
+    /// Additional processing for Switch instructions
+    if (instr_opcode == OpCode::OP_PACKED_SWITCH)
+    {
+      intptr_t const payload_addr = (intptr_t const)(insns + payload_offset);
+      auto const packed_switch_payload =
+          TreeConstructor::get_packed_switch_payload(internal_offset,
+                                                     payload_addr);
+      for (auto const& offset : packed_switch_payload.targets)
+        arg_offset.push_back(offset);
+    }
+
+    if (instr_opcode == OpCode::OP_SPARSE_SWITCH)
+    {
+      auto const payload_addr = (intptr_t const)(insns + payload_offset);
+      auto const sparse_switch_payload =
+          TreeConstructor::get_sparse_switch_offsets(internal_offset,
+                                                     payload_addr);
+      for (auto const& offset : sparse_switch_payload.targets)  
+        arg_offset.push_back(offset);
+    }
 
     // Construct Tree Node
     auto method_node =
-        TreeConstructor::Node(((u1 *)insns - pDexFile->baseAddr) + insnIdx * 2,
-                              insnWidth,
-                              pDecInsn->opCode,
-                              insnIdx,
+        TreeConstructor::Node(method_base_addr,
+                              instr_size,
+                              instr_opcode,
+                              internal_offset,
                               arg_offset);
   
     return method_node;

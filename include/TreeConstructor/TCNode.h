@@ -18,7 +18,7 @@ struct Node
   uint16_t size = -1;
   OpCode opcode = static_cast<OpCode>(0x00);
   uint32_t intern_offset = 0;
-  uint32_t opt_arg_offset = 0;
+  std::vector<uint32_t> opt_arg_offset;
   OpCodeType opcode_type;
   std::vector<std::shared_ptr<Node>> next_nodes;
 
@@ -27,7 +27,7 @@ struct Node
        uint16_t const& _size,
 	     OpCode const& _opcode,
        uint32_t const& _internal_offset,
-       uint32_t const& _opt_arg_offset);
+       std::vector<uint32_t> const& _opt_arg_offset);
 
   void pretty_print() const;
   void dot_fmt_dump() const;

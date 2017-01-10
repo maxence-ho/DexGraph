@@ -9,6 +9,8 @@ include_directories(
 
 set ( HEADERS
   include/Dexdump/OpCodeNames.h
+  include/TreeConstructor/PackedSwitchPayload.h
+  include/TreeConstructor/SparseSwitchPayload.h
   include/TreeConstructor/OpcodeType.h
   include/TreeConstructor/TCNode.h
   include/TreeConstructor/TCOutputHelper.h

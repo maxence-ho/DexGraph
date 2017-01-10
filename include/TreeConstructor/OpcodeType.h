@@ -11,6 +11,7 @@ enum class OpCodeType
 	CALL,
 	NEW,
 	JMP,
+  SWITCH,
 	THROW,
 	SYSCALL,
 	RET,
@@ -23,6 +24,7 @@ namespace OpCodeClassifier
 	bool is_if(OpCode const& candidate);
 	bool is_call(OpCode const& candidate);
 	bool is_jmp(OpCode const& candidate);
+  bool is_switch(OpCode const& candidate);
 	bool is_exception(OpCode const& candidate);
 	bool is_ret(OpCode const& candidate);
   bool is_new(OpCode const & candidate);

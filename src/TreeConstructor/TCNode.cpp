@@ -14,34 +14,34 @@
 
 namespace
 {
-  auto constexpr tab_str = "  ";
+auto constexpr tab_str = "  ";
 
-  std::string get_formated_hex(int const& int_value)
-  {
-    std::stringstream s;
-    s << "0x" 
-      << std::setfill('0') 
-      << std::setw(4)
-      << std::hex 
-      << int_value;
-    return s.str();
-  }
+std::string get_formated_hex(int const& int_value)
+{
+  std::stringstream s;
+  s << "0x" 
+    << std::setfill('0') 
+    << std::setw(4)
+    << std::hex 
+    << int_value;
+  return s.str();
+}
 
-  std::string get_dot_header(TreeConstructor::Node const& node)
-  {
-    std::stringstream header_ss;
-    header_ss << "digraph {\n";
-    header_ss << tab_str << "label=\""
-      << get_formated_hex(node.baseAddr) << "\"\n";
-    return header_ss.str();
-  }
+std::string get_dot_header(TreeConstructor::Node const& node)
+{
+  std::stringstream header_ss;
+  header_ss << "digraph {\n";
+  header_ss << tab_str << "label=\""
+    << get_formated_hex(node.baseAddr) << "\"\n";
+  return header_ss.str();
+}
 
-  std::string get_dot_footer()
-  {
-    std::stringstream footer_ss;
-    footer_ss << "}\n";
-    return footer_ss.str();
-  }
+std::string get_dot_footer()
+{
+  std::stringstream footer_ss;
+  footer_ss << "}\n";
+  return footer_ss.str();
+}
 }
 
 namespace TreeConstructor
@@ -50,7 +50,7 @@ Node::Node(uint32_t const& _baseAddr,
            uint16_t const& _size,
 		       OpCode const& _opcode,
            uint32_t const& _internal_offset,
-           uint32_t const& _opt_arg_offset)
+           std::vector<uint32_t> const& _opt_arg_offset)
 {
 	this->baseAddr = _baseAddr;
   this->size = _size;
@@ -106,7 +106,7 @@ namespace
 
   // Called in a loop to traverse the tree from current_node
   // descending via the leftest node each time
-  // and adding it to visiting_tack iif node has not been visited yet
+  // and adding it to visiting_stack iif node has not been visited yet
   void left_traversal_stack(std::vector<NodeSPtr> & visiting_nodeptr_stack,
                             std::vector<NodeSPtr> & visited_nodeptr_vec,
                             NodeSPtr & current_node)
@@ -145,6 +145,27 @@ namespace
     }
   }
 
+  NodeSPtr get_next_unvisited_child(std::vector<NodeSPtr> & visiting_nodeptr_stack,
+                                    std::vector<NodeSPtr> & visited_nodeptr_vec)
+  {
+    auto const children_next_nodes = visiting_nodeptr_stack.back()->next_nodes;
+    auto next_child_it = std::find_if(
+        children_next_nodes.begin(), children_next_nodes.end(),
+        [&](auto const nodesptr) {
+          auto const search_visiting_it = std::find_if(
+              visiting_nodeptr_stack.begin(), visiting_nodeptr_stack.end(),
+              [&](auto const visiting_nodesptr) {
+                return nodesptr->baseAddr == visiting_nodesptr->baseAddr;
+              });
+          return !find<NodeSPtr>(visited_nodeptr_vec, nodesptr) &&
+                 search_visiting_it == std::end(visiting_nodeptr_stack);
+        });
+    if (next_child_it == std::end(children_next_nodes))
+      return nullptr;
+    else
+      return *next_child_it;
+  }
+
   // Called when all the next_nodes of visiting_stack.back()
   // are already visited => Destack and move cursor up the stack
   void process_cuttedfeet_node(std::vector<NodeSPtr> & visiting_nodeptr_stack,
@@ -167,17 +188,15 @@ namespace
                                  std::stringstream & dot_ss,
                                  NodeSPtr & current_node)
   {
-   
-    {
-      auto const right_node = visiting_nodeptr_stack.back()->next_nodes[1];
-      if (!find<NodeSPtr>(visited_nodeptr_vec, right_node))
-        current_node = right_node;
-      else
-        process_cuttedfeet_node(visiting_nodeptr_stack,
-                                visited_nodeptr_vec,
-                                dot_ss,
-                                current_node);
-    }
+    auto const next_child =
+        get_next_unvisited_child(visiting_nodeptr_stack, visited_nodeptr_vec);
+    if (next_child != nullptr)
+      current_node = next_child;
+    else
+      process_cuttedfeet_node(visiting_nodeptr_stack,
+                              visited_nodeptr_vec,
+                              dot_ss,
+                              current_node);
   }
 }
 
@@ -207,9 +226,17 @@ std::string dot_traversal(Node const& node)
     while (!visiting_nodeptr_stack.empty()
       && visiting_nodeptr_stack.back()->next_nodes.size() < 2)
     {
-      destack_and_dump_node(visiting_nodeptr_stack,
-                            visited_nodeptr_vec,
-                            dot_ss);
+      auto const search_visited_it =
+          std::find_if(visited_nodeptr_vec.begin(), visited_nodeptr_vec.end(),
+                       [&](auto const visited_nodesptr) {
+                         return visiting_nodeptr_stack.back()->baseAddr ==
+                                visited_nodesptr->baseAddr;
+                       });
+      if (search_visited_it == std::end(visited_nodeptr_vec))
+        destack_and_dump_node(visiting_nodeptr_stack, visited_nodeptr_vec,
+                              dot_ss);
+      else
+        visiting_nodeptr_stack.pop_back();
     }
 
     if (!visiting_nodeptr_stack.empty())
@@ -245,110 +272,133 @@ std::string dot_fmt_node(NodeSPtr const node)
 
 namespace
 {
-  bool is_cluster_end_opcodetype(OpCodeType const& opcodetype)
-  {
-    return (opcodetype == OpCodeType::IF
-      || opcodetype == OpCodeType::JMP
-      || opcodetype == OpCodeType::RET);
-  }
+bool is_cluster_end_opcodetype(OpCodeType const& opcodetype)
+{
+  return (opcodetype == OpCodeType::IF
+    || opcodetype == OpCodeType::JMP
+    || opcodetype == OpCodeType::SWITCH
+    || opcodetype == OpCodeType::RET);
+}
 
-  std::map<uint32_t, std::vector<NodeSPtr>> get_node_clusters(
-    std::vector<NodeSPtr> const& nodeptr_vector)
-  {
-    using namespace TreeConstructor;
-    std::queue<NodeSPtr> node_queue;
-    for (auto const& elem : nodeptr_vector)
-      node_queue.push(elem);
+std::map<uint32_t, std::vector<NodeSPtr>> get_node_clusters(
+  std::vector<NodeSPtr> const& nodeptr_vector)
+{
+  using namespace TreeConstructor;
+  std::queue<NodeSPtr> node_queue;
+  for (auto const& elem : nodeptr_vector)
+    node_queue.push(elem);
 
-    std::map<uint32_t, std::vector<NodeSPtr>> ret;
+  std::map<uint32_t, std::vector<NodeSPtr>> ret;
+  do
+  {
+    std::vector<NodeSPtr> cluster;
     do
     {
-      std::vector<NodeSPtr> cluster;
-      do
-      {
-        // Link new node to cluster
-        if (!cluster.empty())
-          cluster.back()->next_nodes.push_back(node_queue.front());
-        // Add new node to cluster
-        cluster.push_back(node_queue.front());
-        node_queue.pop();
-        if (node_queue.empty()) break;
-      } while (!is_cluster_end_opcodetype(cluster.back()->opcode_type));
+      // Link new node to cluster
+      if (!cluster.empty())
+        cluster.back()->next_nodes.push_back(node_queue.front());
+      // Add new node to cluster
+      cluster.push_back(node_queue.front());
+      node_queue.pop();
+      if (node_queue.empty()) break;
+    } while (!is_cluster_end_opcodetype(cluster.back()->opcode_type));
 
-      // Cleanup inner loop
-      ret.emplace(cluster.front()->intern_offset, cluster);
-    } while (!node_queue.empty());
-    return ret;
-  }
+    // Cleanup inner loop
+    ret.emplace(cluster.front()->intern_offset, cluster);
+  } while (!node_queue.empty());
+  return ret;
+}
 
-  void process_if_clusters(
-    std::map<uint32_t, std::vector<NodeSPtr>> const& cluster_map)
+void process_if_clusters(
+  std::map<uint32_t, std::vector<NodeSPtr>> const& cluster_map)
+{
+  for (auto const& cluster : cluster_map)
   {
-    for (auto const& elem : cluster_map)
+    if (cluster.second.back()->opcode_type == OpCodeType::IF)
     {
-      if (elem.second.back()->opcode_type == OpCodeType::IF)
+      // Append true branch
+      auto const true_branch_it = 
+        cluster_map.find(cluster.second.back()->intern_offset
+          + cluster.second.back()->size);
+      if (true_branch_it != std::end(cluster_map))
+        cluster.second.back()->next_nodes.push_back(
+            true_branch_it->second.front());
+      // Append false branch
+      auto const false_branch_it =
+        cluster_map.find(cluster.second.back()->opt_arg_offset.front());
+      if (false_branch_it != std::end(cluster_map))
       {
-        // Append true branch
-        auto const true_branch_it = 
-          cluster_map.find(elem.second.back()->intern_offset
-            + elem.second.back()->size);
-        if (true_branch_it != std::end(cluster_map))
-          elem.second.back()->next_nodes.push_back(
-              true_branch_it->second.front());
-        // Append false branch
-        auto const false_branch_it =
-          cluster_map.find(elem.second.back()->opt_arg_offset);
-        if (false_branch_it != std::end(cluster_map))
-        {
-          elem.second.back()->next_nodes.push_back(
-            false_branch_it->second.front());
-        }
+        cluster.second.back()->next_nodes.push_back(
+          false_branch_it->second.front());
       }
     }
   }
+}
 
-  void process_jmp_clusters(
-    std::map < uint32_t, std::vector<NodeSPtr>> const& cluster_map)
+void process_jmp_clusters(
+  std::map<uint32_t, std::vector<NodeSPtr>> const& cluster_map)
+{
+  typedef uint32_t Offset;
+  std::vector<std::pair<NodeSPtr, Offset>> jmp_vector;
+  for (auto const& cluster : cluster_map)
   {
-    typedef uint32_t Offset;
-    std::vector<std::pair<NodeSPtr, Offset>> jmp_vector;
+    auto const last_nodeptr = cluster.second.back();
+    if (last_nodeptr->opcode_type == OpCodeType::JMP)
+    {
+      jmp_vector.push_back(
+        std::make_pair(last_nodeptr, last_nodeptr->opt_arg_offset.front()));
+    }
+  }
+  // Link all jmp to target
+  for (auto const& elem : jmp_vector)
+  {
     for (auto const& cluster : cluster_map)
     {
-      auto const last_nodeptr = cluster.second.back();
-      // FIXME
-      if (last_nodeptr->opcode == OpCode::OP_SPARSE_SWITCH
-        || last_nodeptr->opcode == OpCode::OP_PACKED_SWITCH)
+      auto cluster_vector = cluster.second;
+      auto const equal_it = 
+        std::find_if(cluster_vector.begin(), cluster_vector.end(),
+          [&](NodeSPtr const& node) {
+            return elem.second == node->intern_offset;
+          });
+      if (equal_it != std::end(cluster_vector))
       {
-        // Switch link implementation is not trivial
+        elem.first->next_nodes.push_back(
+          cluster_vector[equal_it - cluster_vector.begin()]);
         break;
-      }
-
-      if (last_nodeptr->opcode_type == OpCodeType::JMP)
-      {
-        jmp_vector.push_back(
-          std::make_pair(last_nodeptr, last_nodeptr->opt_arg_offset));
-      }
-    }
-    // Link all jmp to target
-    for (auto const& elem : jmp_vector)
-    {
-      for (auto const& cluster : cluster_map)
-      {
-        auto cluster_vector = cluster.second;
-        auto const equal_it = 
-          std::find_if(cluster_vector.begin(), cluster_vector.end(),
-            [&](NodeSPtr const& node) {
-              return elem.second == node->intern_offset;
-            });
-        if (equal_it != std::end(cluster_vector))
-        {
-          elem.first->next_nodes.push_back(
-            cluster_vector[equal_it - cluster_vector.begin()]);
-          break;
-        }
       }
     }
   }
+}
+
+void process_switch_clusters(
+  std::map<uint32_t, std::vector<NodeSPtr>> const& cluster_map)
+{
+  for (auto const& cluster : cluster_map)
+  {
+    auto switch_node = cluster.second.back();
+    if (switch_node->opcode_type == OpCodeType::SWITCH)
+    {
+      auto const offset_vec = switch_node->opt_arg_offset; 
+      for (auto const& offset : offset_vec)
+      {
+        auto const switch_branch_it = cluster_map.find(offset);
+        if (switch_branch_it != std::end(cluster_map))
+          switch_node->next_nodes.push_back(switch_branch_it->second.front());
+      }
+      // Link fallthrough case (not in the offset listed unfortunately)
+      if (!offset_vec.empty())
+      {
+        auto const fallthrough_cluster = std::find_if(
+            cluster_map.begin(), cluster_map.end(), [&](auto const pair) {
+              return !find<uint32_t>(offset_vec, pair.first);
+            });
+        if (fallthrough_cluster != std::end(cluster_map))
+          switch_node->next_nodes.push_back(
+              fallthrough_cluster->second.front());
+      }
+    }
+  }
+}
 }
 
 NodeSPtr construct_node_from_vec(std::vector<NodeSPtr> const &nodeptr_vector)
@@ -356,6 +406,7 @@ NodeSPtr construct_node_from_vec(std::vector<NodeSPtr> const &nodeptr_vector)
   auto cluster_map = get_node_clusters(nodeptr_vector);
   process_if_clusters(cluster_map);
   process_jmp_clusters(cluster_map);
+  process_switch_clusters(cluster_map);
   return cluster_map[0x0000].front();
 }
 

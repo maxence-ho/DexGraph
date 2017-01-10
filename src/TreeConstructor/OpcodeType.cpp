@@ -34,13 +34,17 @@ auto constexpr call_opcodes = std::array<OpCode, 10>
 	OP_INVOKE_INTERFACE_RANGE,
 };
 
-auto constexpr jmp_opcodes = std::array<OpCode, 5> 
+auto constexpr jmp_opcodes = std::array<OpCode, 3> 
 {
 	OP_GOTO,
 	OP_GOTO_16,
 	OP_GOTO_32,
-	OP_PACKED_SWITCH,
-	OP_SPARSE_SWITCH,
+};
+
+auto constexpr switch_opcodes = std::array<OpCode, 2>
+{
+  OP_PACKED_SWITCH,
+  OP_SPARSE_SWITCH,
 };
 
 auto constexpr exception_opcodes = std::array<OpCode, 1> 
@@ -64,37 +68,43 @@ auto constexpr new_opcodes = std::array<OpCode, 4>
   OP_FILLED_NEW_ARRAY_RANGE,
 };
 
-bool OpCodeClassifier::is_if(OpCode const & candidate)
+bool OpCodeClassifier::is_if(OpCode const& candidate)
 {
   return (std::find(begin(if_opcodes), end(if_opcodes), candidate) !=
           std::end(if_opcodes));
 }
 
-bool OpCodeClassifier::is_call(OpCode const & candidate)
+bool OpCodeClassifier::is_call(OpCode const& candidate)
 {
   return (std::find(begin(call_opcodes), end(call_opcodes), candidate) !=
           std::end(call_opcodes));
 }
 
-bool OpCodeClassifier::is_jmp(OpCode const & candidate)
+bool OpCodeClassifier::is_jmp(OpCode const& candidate)
 {
   return (std::find(begin(jmp_opcodes), end(jmp_opcodes), candidate) !=
           std::end(jmp_opcodes));
 }
 
-bool OpCodeClassifier::is_exception(OpCode const & candidate)
+bool OpCodeClassifier::is_switch(OpCode const& candidate)
 {
-  return (std::find(begin(exception_opcodes), end(exception_opcodes),
+  return (std::find(switch_opcodes.begin(), switch_opcodes.end(), candidate) !=
+          std::end(switch_opcodes));
+}
+
+bool OpCodeClassifier::is_exception(OpCode const& candidate)
+{
+  return (std::find(exception_opcodes.begin(), exception_opcodes.end(),
                     candidate) != std::end(exception_opcodes));
 }
 
-bool OpCodeClassifier::is_ret(OpCode const & candidate)
+bool OpCodeClassifier::is_ret(OpCode const& candidate)
 {
   return (std::find(begin(ret_opcodes), end(ret_opcodes), candidate) !=
           std::end(ret_opcodes));
 }
 
-bool OpCodeClassifier::is_new(OpCode const & candidate)
+bool OpCodeClassifier::is_new(OpCode const& candidate)
 {
   return (std::find(begin(new_opcodes), end(new_opcodes), candidate) !=
           std::end(new_opcodes));
@@ -109,6 +119,7 @@ std::string OpCodeTypeToStr(OpCodeType const& opcodetype)
     case OpCodeType::CALL: return "CALL"; break;
     case OpCodeType::NEW: return "NEW"; break;
     case OpCodeType::JMP: return "JMP"; break;
+    case OpCodeType::SWITCH: return "SWITCH"; break;
     case OpCodeType::THROW: return "THROW"; break;
     case OpCodeType::SYSCALL: return "SYSCALL"; break;
     case OpCodeType::RET: return "RET"; break;
@@ -123,6 +134,8 @@ OpCodeType OpCodeClassifier::get_opcode_type(OpCode const& opcode)
     return OpCodeType::CALL;
   else if (is_jmp(opcode))
     return OpCodeType::JMP;
+  else if (is_switch(opcode))
+    return OpCodeType::SWITCH;
   else if (is_exception(opcode))
     return OpCodeType::THROW;
   else if (is_ret(opcode))
