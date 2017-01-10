@@ -390,7 +390,8 @@ void process_switch_clusters(
       {
         auto const fallthrough_cluster = std::find_if(
             cluster_map.begin(), cluster_map.end(), [&](auto const pair) {
-              return !find<uint32_t>(offset_vec, pair.first);
+              return !find<uint32_t>(offset_vec, pair.first) &&
+                     pair.first != switch_node->intern_offset;
             });
         if (fallthrough_cluster != std::end(cluster_map))
           switch_node->next_nodes.push_back(
