@@ -1,7 +1,8 @@
 #include <fstream>
 #include <assert.h>
 
-#include <TreeConstructor/TCOutputHelper.h>
+#include <TreeConstructor/TCHelper.h>
+#include <libdex/DexProto.h>
 
 namespace TreeConstructor
 {
@@ -82,6 +83,39 @@ SparseSwitchPayload get_sparse_switch_offsets(int switch_offset,
   // Check payload size
   assert(ret.targets.size() == size && "Incorrectly sized targets payload.");
   
+  return ret;
+}
+
+MethodInfo get_method_info(DexFile const& dex_file,
+                           uint32_t const& method_idx)
+{
+
+  if (method_idx >= dex_file.pHeader->methodIdsSize)
+    throw std::range_error("method_idx is not in methodIds block");
+
+  auto const pMethodId = dexGetMethodId(&dex_file, method_idx);
+  
+  auto const class_idx = pMethodId->classIdx;
+  auto const proto_idx = pMethodId->protoIdx;
+  auto const name_idx = pMethodId->nameIdx;
+  
+  auto const class_descriptor = dexStringByTypeIdx(&dex_file, pMethodId->classIdx);
+  auto const name = dexStringById(&dex_file, pMethodId->nameIdx);
+  auto const signature = dexCopyDescriptorFromMethodId(&dex_file, pMethodId);
+
+
+  auto const ret = MethodInfo {
+    method_idx,
+
+    class_idx,
+    proto_idx,
+    name_idx,
+
+    class_descriptor,
+    name,
+    signature,
+  };
+
   return ret;
 }
 }

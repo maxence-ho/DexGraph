@@ -5,7 +5,7 @@
 #include <utility>
 #include <assert.h>
 
-#include <TreeConstructor/TCOutputHelper.h>
+#include <TreeConstructor/TCHelper.h>
 #include <TreeConstructor/TCNode.h>
 
 #define tc_print(string) { \
@@ -82,7 +82,7 @@ void Node::dot_fmt_dump() const
 	std::stringstream dot_ss;
   dot_ss << get_dot_header(*current_node);
 
-  dot_ss << dot_traversal(*current_node);
+  dot_ss << dot_traversal(*current_node, dot_fmt_node);
 
   dot_ss << get_dot_footer();
 	tc_print(dot_ss.str());
@@ -134,13 +134,14 @@ namespace
   // with only 1 next_nodes
   void destack_and_dump_node(std::vector<NodeSPtr> & visiting_nodeptr_stack,
                              std::vector<NodeSPtr> & visited_nodeptr_vec, 
-                             std::stringstream & dot_ss)
+                             std::stringstream & dot_ss,
+														 FmtLambda dump_format_method)
   {
     auto const popped_node = visiting_nodeptr_stack.back();
     visiting_nodeptr_stack.pop_back();
     if (!find<NodeSPtr>(visited_nodeptr_vec, popped_node))
     {
-      dot_ss << dot_fmt_node(popped_node); // Visitor operation
+      dot_ss << dump_format_method(popped_node); // Visitor operation
       visited_nodeptr_vec.push_back(popped_node);
     }
   }
@@ -171,11 +172,13 @@ namespace
   void process_cuttedfeet_node(std::vector<NodeSPtr> & visiting_nodeptr_stack,
                                std::vector<NodeSPtr> & visited_nodeptr_vec,
                                std::stringstream & dot_ss,
-                               NodeSPtr & current_node)
+                               NodeSPtr & current_node,
+															 FmtLambda dump_format_method)
   {
     destack_and_dump_node(visiting_nodeptr_stack,
                           visited_nodeptr_vec,
-                          dot_ss);
+                          dot_ss,
+													dump_format_method);
     // Move current_node cursor
     if (!visiting_nodeptr_stack.empty())
       current_node = visiting_nodeptr_stack.back();
@@ -186,7 +189,8 @@ namespace
   void process_multiplefeet_node(std::vector<NodeSPtr> & visiting_nodeptr_stack,
                                  std::vector<NodeSPtr> & visited_nodeptr_vec,
                                  std::stringstream & dot_ss,
-                                 NodeSPtr & current_node)
+                                 NodeSPtr & current_node,
+																 FmtLambda dump_format_method)
   {
     auto const next_child =
         get_next_unvisited_child(visiting_nodeptr_stack, visited_nodeptr_vec);
@@ -196,11 +200,13 @@ namespace
       process_cuttedfeet_node(visiting_nodeptr_stack,
                               visited_nodeptr_vec,
                               dot_ss,
-                              current_node);
+                              current_node,
+															dump_format_method);
   }
 }
 
-std::string dot_traversal(Node const& node)
+std::string dot_traversal(Node const& node, 
+													FmtLambda dump_format_method)
 {
   std::stringstream dot_ss;
   std::vector<NodeSPtr> visiting_nodeptr_stack;
@@ -233,8 +239,10 @@ std::string dot_traversal(Node const& node)
                                 visited_nodesptr->baseAddr;
                        });
       if (search_visited_it == std::end(visited_nodeptr_vec))
-        destack_and_dump_node(visiting_nodeptr_stack, visited_nodeptr_vec,
-                              dot_ss);
+        destack_and_dump_node(visiting_nodeptr_stack,
+					 										visited_nodeptr_vec,
+                              dot_ss,
+															dump_format_method);
       else
         visiting_nodeptr_stack.pop_back();
     }
@@ -244,7 +252,8 @@ std::string dot_traversal(Node const& node)
       process_multiplefeet_node(visiting_nodeptr_stack,
                                 visited_nodeptr_vec,
                                 dot_ss,
-                                current_node);
+                                current_node,
+																dump_format_method);
     }
      
   } while (!visiting_nodeptr_stack.empty());

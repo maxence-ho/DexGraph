@@ -13,7 +13,7 @@ set ( HEADERS
   include/TreeConstructor/SparseSwitchPayload.h
   include/TreeConstructor/OpcodeType.h
   include/TreeConstructor/TCNode.h
-  include/TreeConstructor/TCOutputHelper.h
+  include/TreeConstructor/TCHelper.h
   include/libdex/CmdUtils.h
   include/libdex/DexCatch.h
   include/libdex/DexClass.h
@@ -51,7 +51,7 @@ set( SOURCES
   src/libdex/ZipArchive.cpp
   src/TreeConstructor/OpcodeType.cpp
   src/TreeConstructor/TCNode.cpp
-  src/TreeConstructor/TCOutputHelper.cpp
+  src/TreeConstructor/TCHelper.cpp
 )
 
 add_executable(dexgraph ${SOURCES} ${HEADERS})

@@ -51,7 +51,7 @@
 
 // Modified Tool
 #include <sstream>
-#include <TreeConstructor/TCOutputHelper.h>
+#include <TreeConstructor/TCHelper.h>
 #include <TreeConstructor/TCNode.h>
 
 static const char* gProgName = "dexdump";
@@ -191,7 +191,7 @@ static char* descriptorClassToDot(const char* str)
 
     /* reduce to just the class name, trimming trailing ';' */
     lastSlash = strrchr(str, '/');
-    if (lastSlash == NULL)
+    if (lastSlash == nullptr)
         lastSlash = str + 1;        /* start past 'L' */
     else
         lastSlash++;                /* start past '/' */
@@ -375,9 +375,9 @@ void dumpClassDef(DexFile* pDexFile, int idx)
 
     pClassDef = dexGetClassDef(pDexFile, idx);
     pEncodedData = dexGetClassData(pDexFile, pClassDef);
-    pClassData = dexReadAndVerifyClassData(&pEncodedData, NULL);
+    pClassData = dexReadAndVerifyClassData(&pEncodedData, nullptr);
 
-    if (pClassData == NULL) {
+    if (pClassData == nullptr) {
         fprintf(stderr, "Trouble reading class data\n");
         return;
     }
@@ -416,7 +416,7 @@ void dumpCatches(DexFile* pDexFile, const DexCode* pCode)
             DexCatchHandler* handler = dexCatchIteratorNext(&iterator);
             const char* descriptor;
             
-            if (handler == NULL) {
+            if (handler == nullptr) {
                 break;
             }
             
@@ -443,7 +443,7 @@ void dumpPositions(DexFile* pDexFile, const DexCode* pCode,
             = dexStringByTypeIdx(pDexFile, pMethodId->classIdx);
 
     dexDecodeDebugInfo(pDexFile, pCode, classDescriptor, pMethodId->protoIdx,
-            pDexMethod->accessFlags, dumpPositionsCb, NULL, NULL);
+            pDexMethod->accessFlags, dumpPositionsCb, nullptr, nullptr);
 }
 
 static void dumpLocalsCb(void *cnxt, u2 reg, u4 startAddress,
@@ -464,7 +464,7 @@ void dumpLocals(DexFile* pDexFile, const DexCode* pCode,
             = dexStringByTypeIdx(pDexFile, pMethodId->classIdx);
 
     dexDecodeDebugInfo(pDexFile, pCode, classDescriptor, pMethodId->protoIdx,
-            pDexMethod->accessFlags, NULL, dumpLocalsCb, NULL);
+            pDexMethod->accessFlags, nullptr, dumpLocalsCb, nullptr);
 }
 
 /*
@@ -945,14 +945,16 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
 /*
  * Dump a bytecode disassembly.
  */
-void dumpBytecodes(DexFile* pDexFile, const DexMethod* pDexMethod)
+std::pair<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr> dumpBytecodes(
+		DexFile *pDexFile,
+	 	const DexMethod *pDexMethod) 
 {
   const DexCode* pCode = dexGetCode(pDexFile, pDexMethod);
   const u2* insns;
   int insnIdx;
   FieldMethodInfo methInfo;
   int startAddr;
-  char* className = NULL;
+  char* className = nullptr;
 
   assert(pCode->insnsSize > 0);
   insns = pCode->insns;
@@ -992,6 +994,7 @@ void dumpBytecodes(DexFile* pDexFile, const DexMethod* pDexMethod)
     }
 
     dexDecodeInstruction(gInstrFormat, insns, &decInsn);
+
     auto const instr_node =
         dumpInstruction(pDexFile, pCode, insnIdx, insnWidth, &decInsn);
 
@@ -1002,89 +1005,55 @@ void dumpBytecodes(DexFile* pDexFile, const DexMethod* pDexMethod)
     node_vector.push_back(std::make_shared<TreeConstructor::Node>(instr_node));
   }
 
+  auto const method_info =
+      TreeConstructor::get_method_info(*pDexFile, pDexMethod->methodIdx);
   auto const nodeptr = TreeConstructor::construct_node_from_vec(node_vector);
   nodeptr->dot_fmt_dump();
 
   free(className);
+
+	return std::make_pair(method_info, nodeptr);
 }
 
 /*
  * Dump a "code" struct.
  */
-void dumpCode(DexFile* pDexFile, const DexMethod* pDexMethod)
+std::pair<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr> dumpCode(
+		DexFile* pDexFile,
+	 	const DexMethod* pDexMethod)
 {
     const DexCode* pCode = dexGetCode(pDexFile, pDexMethod);
 
     if (gOptions.disassemble)
-        dumpBytecodes(pDexFile, pDexMethod);
+			return dumpBytecodes(pDexFile, pDexMethod);
+    else
+      throw std::runtime_error("Could not dump byte_code for method_id " +
+                               std::to_string(pDexMethod->methodIdx));
 }
 
 /*
  * Dump a method.
  */
-void dumpMethod(DexFile* pDexFile, const DexMethod* pDexMethod, int i)
-{
-	const DexMethodId* pMethodId;
-	const char* backDescriptor;
-	const char* name;
-	char* typeDescriptor = NULL;
-	char* accessStr = NULL;
+std::pair<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr>
+dumpMethod(DexFile *pDexFile, const DexMethod *pDexMethod, int i) {
+  const DexMethodId *pMethodId;
+  const char *backDescriptor;
+  const char *name;
+  char *typeDescriptor = nullptr;
+  char *accessStr = nullptr;
 
-	if (gOptions.exportsOnly &&
-		(pDexMethod->accessFlags & (ACC_PUBLIC | ACC_PROTECTED)) == 0)
-	{
-		return;
-	}
+  if (gOptions.exportsOnly &&
+      (pDexMethod->accessFlags & (ACC_PUBLIC | ACC_PROTECTED)) == 0) {
+    throw std::runtime_error("Could not access method with method_idx: " +
+                             std::to_string(pDexMethod->methodIdx));
+  }
 
-	pMethodId = dexGetMethodId(pDexFile, pDexMethod->methodIdx);
-	name = dexStringById(pDexFile, pMethodId->nameIdx);
-	typeDescriptor = dexCopyDescriptorFromMethodId(pDexFile, pMethodId);
-
-	backDescriptor = dexStringByTypeIdx(pDexFile, pMethodId->classIdx);
-
-	accessStr = createAccessFlagStr(pDexMethod->accessFlags,
-		kAccessForMethod);
-
-	if (gOptions.outputFormat == OUTPUT_PLAIN) {
-
-		if (pDexMethod->codeOff == 0) {
-		}
-		else {
-			dumpCode(pDexFile, pDexMethod);
-		}
-		if (gOptions.outputFormat == OUTPUT_XML) {
-			bool constructor = (name[0] == '<');
-
-			if (constructor) {
-				char *tmp;
-
-				tmp = descriptorClassToDot(backDescriptor);
-				free(tmp);
-
-				tmp = descriptorToDot(backDescriptor);
-				free(tmp);
-			}
-			else {
-				const char *returnType = strrchr(typeDescriptor, ')');
-				if (returnType == NULL) {
-					fprintf(stderr, "bad method type descriptor '%s'\n", typeDescriptor);
-					goto bail;
-				}
-			}
-
-			/*
-			 * Parameters.
-			 */
-			if (typeDescriptor[0] != '(') {
-				fprintf(stderr, "ERROR: bad descriptor '%s'\n", typeDescriptor);
-				goto bail;
-			}
-		}
-
-	bail:
-		free(typeDescriptor);
-		free(accessStr);
-	}
+  if (pDexMethod->codeOff != 0)
+    return dumpCode(pDexFile, pDexMethod);
+  else
+    throw std::runtime_error("codeOff for method_idx " +
+                             std::to_string(pDexMethod->methodIdx) +
+                             " equals 0.");
 }
 
 /*
@@ -1124,101 +1093,117 @@ void dumpIField(const DexFile* pDexFile, const DexField* pIField, int i)
  *
  * Note "idx" is a DexClassDef index, not a DexTypeId index.
  *
- * If "*pLastPackage" is NULL or does not match the current class' package,
+ * If "*pLastPackage" is nullptr or does not match the current class' package,
  * the value will be replaced with a newly-allocated string.
  */
-void dumpClass(DexFile* pDexFile, int idx, char** pLastPackage)
+std::map<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr> dumpClass(
+		DexFile *pDexFile,
+	 	int idx,
+	 	char **pLastPackage) 
 {
-    const DexTypeList* pInterfaces;
-    const DexClassDef* pClassDef;
-    DexClassData* pClassData = NULL;
-    const u1* pEncodedData;
-    const char* fileName;
-    const char* classDescriptor;
-    const char* superclassDescriptor;
-    char* accessStr = NULL;
-    int i;
+  const DexTypeList *pInterfaces;
+  const DexClassDef *pClassDef;
+  DexClassData *pClassData = nullptr;
+  const u1 *pEncodedData;
+  const char *fileName;
+  const char *classDescriptor;
+  const char *superclassDescriptor;
+  char *accessStr = nullptr;
+  int i;
 
-    pClassDef = dexGetClassDef(pDexFile, idx);
+  std::map<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr> ret;
 
-    pEncodedData = dexGetClassData(pDexFile, pClassDef);
-    pClassData = dexReadAndVerifyClassData(&pEncodedData, NULL);
+  pClassDef = dexGetClassDef(pDexFile, idx);
 
-    if (pClassData == NULL) {
-		free(pClassData);
-		free(accessStr);
-		return;
-    }
-    
-    classDescriptor = dexStringByTypeIdx(pDexFile, pClassDef->classIdx);
+  pEncodedData = dexGetClassData(pDexFile, pClassDef);
+  pClassData = dexReadAndVerifyClassData(&pEncodedData, nullptr);
 
-    /*
-     * For the XML output, show the package name.  Ideally we'd gather
-     * up the classes, sort them, and dump them alphabetically so the
-     * package name wouldn't jump around, but that's not a great plan
-     * for something that needs to run on the device.
-     */
-    if (!(classDescriptor[0] == 'L' &&
-          classDescriptor[strlen(classDescriptor)-1] == ';'))
-    {
-        /* arrays and primitives should not be defined explicitly */
-        fprintf(stderr, "Malformed class name '%s'\n", classDescriptor);
-        /* keep going? */
-    } else if (gOptions.outputFormat == OUTPUT_XML) {
-        char* mangle;
-        char* lastSlash;
-        char* cp;
+  if (pClassData == nullptr) {
+    free(pClassData);
+    free(accessStr);
+		return ret;
+  }
 
-        mangle = strdup(classDescriptor + 1);
-        mangle[strlen(mangle)-1] = '\0';
+  classDescriptor = dexStringByTypeIdx(pDexFile, pClassDef->classIdx);
 
-        /* reduce to just the package name */
-        lastSlash = strrchr(mangle, '/');
-        if (lastSlash != NULL) {
-            *lastSlash = '\0';
-        } else {
-            *mangle = '\0';
-        }
+  /*
+   * For the XML output, show the package name.  Ideally we'd gather
+   * up the classes, sort them, and dump them alphabetically so the
+   * package name wouldn't jump around, but that's not a great plan
+   * for something that needs to run on the device.
+   */
+  if (!(classDescriptor[0] == 'L' &&
+        classDescriptor[strlen(classDescriptor) - 1] == ';')) {
+    /* arrays and primitives should not be defined explicitly */
+    fprintf(stderr, "Malformed class name '%s'\n", classDescriptor);
+    /* keep going? */
+  } else if (gOptions.outputFormat == OUTPUT_XML) {
+    char *mangle;
+    char *lastSlash;
+    char *cp;
 
-        for (cp = mangle; *cp != '\0'; cp++) {
-            if (*cp == '/')
-                *cp = '.';
-        }
+    mangle = strdup(classDescriptor + 1);
+    mangle[strlen(mangle) - 1] = '\0';
 
-        if (*pLastPackage == NULL || strcmp(mangle, *pLastPackage) != 0) {
-            /* start of a new package */
-            free(*pLastPackage);
-            *pLastPackage = mangle;
-        } else {
-            free(mangle);
-        }
-    }
-
-    accessStr = createAccessFlagStr(pClassDef->accessFlags, kAccessForClass);
-
-    if (pClassDef->superclassIdx == kDexNoIndex) {
-        superclassDescriptor = NULL;
+    /* reduce to just the package name */
+    lastSlash = strrchr(mangle, '/');
+    if (lastSlash != nullptr) {
+      *lastSlash = '\0';
     } else {
-        superclassDescriptor =
-            dexStringByTypeIdx(pDexFile, pClassDef->superclassIdx);
+      *mangle = '\0';
     }
 
-    pInterfaces = dexGetInterfacesList(pDexFile, pClassDef);
-    
-    for (i = 0; i < (int) pClassData->header.directMethodsSize; i++) {
-        dumpMethod(pDexFile, &pClassData->directMethods[i], i);
+    for (cp = mangle; *cp != '\0'; cp++) {
+      if (*cp == '/')
+        *cp = '.';
     }
 
-    for (i = 0; i < (int) pClassData->header.virtualMethodsSize; i++) {
-        dumpMethod(pDexFile, &pClassData->virtualMethods[i], i);
+    if (*pLastPackage == nullptr || strcmp(mangle, *pLastPackage) != 0) {
+      /* start of a new package */
+      free(*pLastPackage);
+      *pLastPackage = mangle;
+    } else {
+      free(mangle);
     }
+  }
 
-    // TODO: Annotations.
+  accessStr = createAccessFlagStr(pClassDef->accessFlags, kAccessForClass);
 
-    if (pClassDef->sourceFileIdx != kDexNoIndex)
-        fileName = dexStringById(pDexFile, pClassDef->sourceFileIdx);
-    else
-        fileName = "unknown";
+  if (pClassDef->superclassIdx == kDexNoIndex) {
+    superclassDescriptor = nullptr;
+  } else {
+    superclassDescriptor =
+        dexStringByTypeIdx(pDexFile, pClassDef->superclassIdx);
+  }
+
+  pInterfaces = dexGetInterfacesList(pDexFile, pClassDef);
+
+  for (i = 0; i < (int)pClassData->header.directMethodsSize; i++) {
+		try
+		{
+			auto const pair = dumpMethod(pDexFile, &pClassData->directMethods[i], i);
+			ret.emplace(pair.first, pair.second);
+		}
+		catch(std::runtime_error const& e) {}
+  }
+
+  for (i = 0; i < (int)pClassData->header.virtualMethodsSize; i++) {
+		try
+		{
+			auto const pair = dumpMethod(pDexFile, &pClassData->virtualMethods[i], i);
+			ret.emplace(pair.first, pair.second);
+		}
+		catch (std::runtime_error const& e) {}
+  }
+
+  // TODO: Annotations.
+
+  if (pClassDef->sourceFileIdx != kDexNoIndex)
+    fileName = dexStringById(pDexFile, pClassDef->sourceFileIdx);
+  else
+    fileName = "unknown";
+
+	return ret;
 }
 
 
@@ -1301,24 +1286,27 @@ void dumpMethodMap(DexFile* pDexFile, const DexMethod* pDexMethod, int idx,
         goto bail;
     }
 
-    if (addrWidth > 0) {
-        u1 regWidth;
-        u2 numEntries;
-        int idx, addr, byte;
+    if (addrWidth > 0) 
+		{
+      u1 regWidth;
+      u2 numEntries;
+      int idx, addr, byte;
 
-        regWidth = *data++;
-        numEntries = *data++;
-        numEntries |= (*data++) << 8;
+      regWidth = *data++;
+      numEntries = *data++;
+      numEntries |= (*data++) << 8;
 
-        for (idx = 0; idx < numEntries; idx++) {
-            addr = *data++;
-            if (addrWidth > 1)
-                addr |= (*data++) << 8;
+      for (idx = 0; idx < numEntries; idx++) 
+			{
+        addr = *data++;
+        if (addrWidth > 1)
+          addr |= (*data++) << 8;
 
-            for (byte = 0; byte < regWidth; byte++) {
-				*data++;
-            }
+        for (byte = 0; byte < regWidth; byte++) 
+				{
+          *data++;
         }
+      }
     }
 
 bail:
@@ -1344,7 +1332,7 @@ void dumpRegisterMaps(DexFile* pDexFile)
     int baseFileOffset = (u1*) pClassPool - (u1*) pDexFile->pOptHeader;
     int idx;
 
-    if (pClassPool == NULL) {
+    if (pClassPool == nullptr) {
         return;
     }
 
@@ -1374,8 +1362,8 @@ void dumpRegisterMaps(DexFile* pDexFile)
         int i;
 
         pEncodedData = dexGetClassData(pDexFile, pClassDef);
-        pClassData = dexReadAndVerifyClassData(&pEncodedData, NULL);
-        if (pClassData == NULL) {
+        pClassData = dexReadAndVerifyClassData(&pEncodedData, nullptr);
+        if (pClassData == nullptr) {
             fprintf(stderr, "Trouble reading class data\n");
             continue;
         }
@@ -1399,30 +1387,38 @@ void dumpRegisterMaps(DexFile* pDexFile)
 /*
  * Dump the requested sections of the file.
  */
-void processDexFile(const char* fileName, DexFile* pDexFile)
+void processDexFile(const char *fileName, DexFile *pDexFile)
 {
-    char* package = NULL;
-    int i;
+  char *package = nullptr;
+  int i;
 
-    if (gOptions.dumpRegisterMaps) {
-        dumpRegisterMaps(pDexFile);
-        return;
-    }
+  if (gOptions.dumpRegisterMaps) {
+    dumpRegisterMaps(pDexFile);
+    return;
+  }
 
-    if (gOptions.showFileHeaders)
-        dumpFileHeader(pDexFile);
+  if (gOptions.showFileHeaders)
+    dumpFileHeader(pDexFile);
 
-    for (i = 0; i < (int) pDexFile->pHeader->classDefsSize; i++) {
-        if (gOptions.showSectionHeaders)
-            dumpClassDef(pDexFile, i);
+	// Construct {method, node} map for each method in the program.
+  std::map<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr>
+      method_node_map;
+  for (i = 0; i < (int)pDexFile->pHeader->classDefsSize; i++) {
+    if (gOptions.showSectionHeaders)
+      dumpClassDef(pDexFile, i);
 
-        dumpClass(pDexFile, i, &package);
-    }
+    auto const class_map = dumpClass(pDexFile, i, &package);
+    method_node_map.insert(class_map.begin(), class_map.end());
+  }
 
-	/* free the last one allocated */
-    if (package != NULL) {
-        free(package);
-    }
+  // Now that we have all the methods, we can resolve CALL instructions.
+	
+	// Dump result using given format
+
+  /* free the last one allocated */
+  if (package != nullptr) {
+    free(package);
+  }
 }
 
 
@@ -1431,7 +1427,7 @@ void processDexFile(const char* fileName, DexFile* pDexFile)
  */
 int process(const char* fileName)
 {
-    DexFile* pDexFile = NULL;
+    DexFile* pDexFile = nullptr;
     MemMapping map;
     bool mapped = false;
     int result = -1;
@@ -1446,7 +1442,7 @@ int process(const char* fileName)
         flags |= kDexParseContinueOnError;
 
 	pDexFile = dexFileParse((const u1*)map.addr, map.length, flags);
-    if (pDexFile == NULL) {
+    if (pDexFile == nullptr) {
         fprintf(stderr, "ERROR: DEX parse failed\n");
         goto bail;
     }
@@ -1461,7 +1457,7 @@ int process(const char* fileName)
 bail:
     if (mapped)
         sysReleaseShmem(&map);
-    if (pDexFile != NULL)
+    if (pDexFile != nullptr)
         dexFileFree(pDexFile);
     return result;
 }

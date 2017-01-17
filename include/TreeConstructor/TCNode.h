@@ -1,10 +1,11 @@
 #pragma once
 
-#include <string>
-#include <vector>
+#include <functional>
 #include <memory>
 #include <queue>
 #include <stack>
+#include <string>
+#include <vector>
 
 #include <TreeConstructor/OpcodeType.h>
 
@@ -14,8 +15,8 @@ struct Node;
 typedef std::shared_ptr<Node> NodeSPtr;
 struct Node
 {
-  uint32_t baseAddr = -1;
-  uint16_t size = -1;
+  uint32_t baseAddr = 0;
+  uint16_t size = 0;
   OpCode opcode = static_cast<OpCode>(0x00);
   uint32_t intern_offset = 0;
   std::vector<uint32_t> opt_arg_offset;
@@ -34,7 +35,9 @@ struct Node
   int count_node() const;
 };
 
-std::string dot_traversal(Node const& node);
+typedef std::function<std::string(NodeSPtr const&)> FmtLambda;
+std::string dot_traversal(Node const& node,
+                          FmtLambda dump_format_method);
 std::string dot_fmt_node(NodeSPtr const node);
 
 NodeSPtr construct_node_from_vec(std::vector<NodeSPtr> const &nodeptr_vector);
