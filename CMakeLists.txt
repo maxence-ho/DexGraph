@@ -9,11 +9,6 @@ include_directories(
 
 set ( HEADERS
   include/Dexdump/OpCodeNames.h
-  include/TreeConstructor/PackedSwitchPayload.h
-  include/TreeConstructor/SparseSwitchPayload.h
-  include/TreeConstructor/OpcodeType.h
-  include/TreeConstructor/TCNode.h
-  include/TreeConstructor/TCHelper.h
   include/libdex/CmdUtils.h
   include/libdex/DexCatch.h
   include/libdex/DexClass.h
@@ -28,6 +23,12 @@ set ( HEADERS
   include/libdex/sha1.h
   include/other/inttypes.h
   include/other/typeof.h
+  include/TreeConstructor/FmtDot.h
+  include/TreeConstructor/PackedSwitchPayload.h
+  include/TreeConstructor/SparseSwitchPayload.h
+  include/TreeConstructor/OpcodeType.h
+  include/TreeConstructor/TCNode.h
+  include/TreeConstructor/TCHelper.h
   include/vm/Common.h
   include/vm/DalvikVersion.h
 )
@@ -49,6 +50,7 @@ set( SOURCES
   src/libdex/sha1.cpp
   src/libdex/SysUtil.cpp
   src/libdex/ZipArchive.cpp
+  src/TreeConstructor/FmtDot.cpp
   src/TreeConstructor/OpcodeType.cpp
   src/TreeConstructor/TCNode.cpp
   src/TreeConstructor/TCHelper.cpp

@@ -1,5 +1,6 @@
-#include <fstream>
 #include <assert.h>
+#include <fstream>
+#include <iomanip>
 
 #include <TreeConstructor/TCHelper.h>
 #include <libdex/DexProto.h>
@@ -16,6 +17,17 @@ void write(std::basic_string<char> const& filename,
 	//if (ofs)
 	ofs << msg << "\n";
 	ofs.close();
+}
+
+std::string get_formated_hex(int const& int_value)
+{
+  std::stringstream s;
+  s << "0x" 
+    << std::setfill('0') 
+    << std::setw(4)
+    << std::hex 
+    << int_value;
+  return s.str();
 }
 }
 PackedSwitchPayload get_packed_switch_payload(int switch_offset,
@@ -109,6 +121,7 @@ MethodInfo get_method_info(DexFile const& dex_file,
 
     class_idx,
     proto_idx,
+
     name_idx,
 
     class_descriptor,

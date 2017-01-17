@@ -13,6 +13,9 @@
 	buff_str = buff; \
 }  \
 
+#define tc_print(string) { \
+  printf("%s", string.c_str()); \
+}  \
 
 namespace TreeConstructor
 {
@@ -23,6 +26,8 @@ auto constexpr graph_filename = "graph.dot";
 
 void write(std::basic_string<char> const& filename,
            std::basic_string<char> const& content);
+
+std::string get_formated_hex(int const& int_value);
 }
 
 // Switch Payload getters

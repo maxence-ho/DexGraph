@@ -1,5 +1,3 @@
-#include <iostream>
-#include <iomanip>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -7,42 +5,6 @@
 
 #include <TreeConstructor/TCHelper.h>
 #include <TreeConstructor/TCNode.h>
-
-#define tc_print(string) { \
-  printf("%s", string.c_str()); \
-}  \
-
-namespace
-{
-auto constexpr tab_str = "  ";
-
-std::string get_formated_hex(int const& int_value)
-{
-  std::stringstream s;
-  s << "0x" 
-    << std::setfill('0') 
-    << std::setw(4)
-    << std::hex 
-    << int_value;
-  return s.str();
-}
-
-std::string get_dot_header(TreeConstructor::Node const& node)
-{
-  std::stringstream header_ss;
-  header_ss << "digraph {\n";
-  header_ss << tab_str << "label=\""
-    << get_formated_hex(node.baseAddr) << "\"\n";
-  return header_ss.str();
-}
-
-std::string get_dot_footer()
-{
-  std::stringstream footer_ss;
-  footer_ss << "}\n";
-  return footer_ss.str();
-}
-}
 
 namespace TreeConstructor
 {
@@ -58,34 +20,6 @@ Node::Node(uint32_t const& _baseAddr,
   this->intern_offset = _internal_offset;
   this->opt_arg_offset = _opt_arg_offset;
   this->opcode_type = OpCodeClassifier::get_opcode_type(_opcode);
-}
-
-void Node::pretty_print() const
-{
-	// Print current node
-	auto node_str = std::basic_stringstream<char>();
-	node_str << "------------" << "\n";
-	node_str << "base address: " << this->baseAddr << "\n";
-	node_str << "opcode: 0x" << std::hex
-    << std::stoi(std::to_string(this->opcode)) << "\n";
-	node_str << "------------\n" << "\n";
-	Helper::write(Helper::classlist_filename, node_str.str());
-	// Recursively print children
-  for (auto const& node : this->next_nodes)
-    node->pretty_print();
-}
-
-void Node::dot_fmt_dump() const
-{
-	// Print graph description
-  auto current_node = this;
-	std::stringstream dot_ss;
-  dot_ss << get_dot_header(*current_node);
-
-  dot_ss << dot_traversal(*current_node, dot_fmt_node);
-
-  dot_ss << get_dot_footer();
-	tc_print(dot_ss.str());
 }
 
 int Node::count_node() const
@@ -260,25 +194,6 @@ std::string dot_traversal(Node const& node,
   return dot_ss.str();
 }
 
-std::string dot_fmt_node(NodeSPtr const node)
-{
-  std::stringstream dot_ss;
-  // Current Node
-  dot_ss << tab_str << "\""
-    << get_formated_hex(node->baseAddr) << "\"";
-  dot_ss << "[label=\""
-    << OpCodeTypeToStr(node->opcode_type) << "\"];\n";
-  // Child fmt
-  for (auto const& child_node : node->next_nodes)
-  {
-    // Link Child node to parent node
-    dot_ss << tab_str << "\"" << get_formated_hex(node->baseAddr) << "\"";
-    dot_ss << " -> ";
-    dot_ss << "\"" << get_formated_hex(child_node->baseAddr) << "\";\n";
-  }
-  return dot_ss.str();
-}
-
 namespace
 {
 bool is_cluster_end_opcodetype(OpCodeType const& opcodetype)
@@ -419,6 +334,4 @@ NodeSPtr construct_node_from_vec(std::vector<NodeSPtr> const &nodeptr_vector)
   process_switch_clusters(cluster_map);
   return cluster_map[0x0000].front();
 }
-
 }
-

@@ -29,15 +29,15 @@
  * - no generic signatures on parameters, e.g. type="java.lang.Class&lt;?&gt;"
  * - class shows declared fields and methods; does not show inherited fields
  */
-#include "libdex/DexFile.h"
-#include "libdex/DexCatch.h"
-#include "libdex/DexClass.h"
-#include "libdex/DexProto.h"
-#include "libdex/InstrUtils.h"
-#include "libdex/SysUtil.h"
-#include "libdex/CmdUtils.h"
+#include <libdex/DexFile.h>
+#include <libdex/DexCatch.h>
+#include <libdex/DexClass.h>
+#include <libdex/DexProto.h>
+#include <libdex/InstrUtils.h>
+#include <libdex/SysUtil.h>
+#include <libdex/CmdUtils.h>
 
-#include "dexdump/OpCodeNames.h"
+#include <dexdump/OpCodeNames.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -51,6 +51,7 @@
 
 // Modified Tool
 #include <sstream>
+#include <TreeConstructor/FmtDot.h>
 #include <TreeConstructor/TCHelper.h>
 #include <TreeConstructor/TCNode.h>
 
@@ -1008,7 +1009,7 @@ std::pair<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr> dumpBytecodes(
   auto const method_info =
       TreeConstructor::get_method_info(*pDexFile, pDexMethod->methodIdx);
   auto const nodeptr = TreeConstructor::construct_node_from_vec(node_vector);
-  nodeptr->dot_fmt_dump();
+	Fmt::Dot::dump_tree(*nodeptr);
 
   free(className);
 
@@ -1036,12 +1037,6 @@ std::pair<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr> dumpCode(
  */
 std::pair<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr>
 dumpMethod(DexFile *pDexFile, const DexMethod *pDexMethod, int i) {
-  const DexMethodId *pMethodId;
-  const char *backDescriptor;
-  const char *name;
-  char *typeDescriptor = nullptr;
-  char *accessStr = nullptr;
-
   if (gOptions.exportsOnly &&
       (pDexMethod->accessFlags & (ACC_PUBLIC | ACC_PROTECTED)) == 0) {
     throw std::runtime_error("Could not access method with method_idx: " +
@@ -1065,7 +1060,6 @@ void dumpSField(const DexFile* pDexFile, const DexField* pSField, int i)
     const char* backDescriptor;
     const char* name;
     const char* typeDescriptor;
-    char* accessStr;
 
     if (gOptions.exportsOnly &&
         (pSField->accessFlags & (ACC_PUBLIC | ACC_PROTECTED)) == 0)

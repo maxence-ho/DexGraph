@@ -30,15 +30,12 @@ struct Node
        uint32_t const& _internal_offset,
        std::vector<uint32_t> const& _opt_arg_offset);
 
-  void pretty_print() const;
-  void dot_fmt_dump() const;
   int count_node() const;
 };
 
 typedef std::function<std::string(NodeSPtr const&)> FmtLambda;
 std::string dot_traversal(Node const& node,
                           FmtLambda dump_format_method);
-std::string dot_fmt_node(NodeSPtr const node);
 
 NodeSPtr construct_node_from_vec(std::vector<NodeSPtr> const &nodeptr_vector);
 }
