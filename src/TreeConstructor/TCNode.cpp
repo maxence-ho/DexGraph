@@ -11,12 +11,14 @@ namespace TreeConstructor
 Node::Node(uint32_t const& _baseAddr,
            uint16_t const& _size,
 		       OpCode const& _opcode,
+					 MethodInfo const& _called_method_info,
            uint32_t const& _internal_offset,
            std::vector<uint32_t> const& _opt_arg_offset)
 {
 	this->baseAddr = _baseAddr;
   this->size = _size;
 	this->opcode = _opcode;
+	this->called_method_info = _called_method_info;
   this->intern_offset = _internal_offset;
   this->opt_arg_offset = _opt_arg_offset;
   this->opcode_type = OpCodeClassifier::get_opcode_type(_opcode);
@@ -333,5 +335,28 @@ NodeSPtr construct_node_from_vec(std::vector<NodeSPtr> const &nodeptr_vector)
   process_jmp_clusters(cluster_map);
   process_switch_clusters(cluster_map);
   return cluster_map[0x0000].front();
+}
+
+std::vector<NodeSPtr> get_method_call_nodes(
+		std::vector<NodeSPtr> const &node_vec)
+{
+	std::vector<NodeSPtr> ret;
+	for (auto const& nodesptr : node_vec)
+	{
+		if (OpCodeClassifier::get_opcode_type(nodesptr->opcode) == OpCodeType::CALL)
+			ret.push_back(nodesptr);
+	}
+	return ret;
+}
+
+void process_calls(std::map<MethodInfo, NodeSPtr> &map,
+                   std::vector<NodeSPtr> &call_node_vec)
+{
+  for (auto &call_node : call_node_vec)
+  {
+    auto const it = map.find(call_node->called_method_info);
+    if (it != map.end())
+      call_node->next_nodes.push_back(it->second);
+  }
 }
 }

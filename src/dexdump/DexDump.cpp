@@ -60,6 +60,9 @@ static const char* gProgName = "dexdump";
 static InstructionWidth* gInstrWidth;
 static InstructionFormat* gInstrFormat;
 
+typedef std::pair<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr>
+    id_node_pair;
+
 typedef enum OutputFormat {
     OUTPUT_PLAIN = 0,               /* default */
     OUTPUT_XML,                     /* fancy */
@@ -528,6 +531,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
 	std::string buff_str;
   std::vector<uint32_t> arg_offset;
   uint32_t payload_offset = 0;
+	TreeConstructor::MethodInfo opt_called_method_info;
 
   const u2* insns = pCode->insns;
   int i;
@@ -742,32 +746,14 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
     }
     case kFmt35c: // op vB, {vD, vE, vF, vG, vA}, thing@CCCC
     {
-      /* NOTE: decoding of 35c doesn't quite match spec */
-      for (i = 0; i < (int)pDecInsn->vA; i++) {
-        if (i == 0) {
-          // Modified Tool
-          tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
-        } else {
-          // Modified Tool
-          tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
-        }
-      }
-      if (pDecInsn->opCode == OP_FILLED_NEW_ARRAY) {
-        // Modified Tool
-        tc_str_format(buff_str, "}, %s // class@%04x",
-                      getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
-        
-      } else {
-        FieldMethodInfo methInfo;
-        if (getMethodInfo(pDexFile, pDecInsn->vB, &methInfo)) {
-          // Modified Tool
-          tc_str_format(buff_str, "}, %s.%s:%s // method@%04x",
-                        methInfo.classDescriptor, methInfo.name,
-                        methInfo.signature, pDecInsn->vB);
-        } else {
-          // Modified Tool
-          tc_str_format(buff_str, "}, ??? // method@%04x", pDecInsn->vB);
-        }
+      if (pDecInsn->opCode != OP_FILLED_NEW_ARRAY) {
+				try 
+				{
+					auto const method_idx = pDecInsn->vB;
+					opt_called_method_info =
+            TreeConstructor::get_method_info(*pDexFile, method_idx);
+				}
+				catch (std::range_error const& e) {}
       }
       break;
     }
@@ -790,38 +776,14 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
     } break;
     case kFmt3rc: // op {vCCCC .. v(CCCC+AA-1)}, meth@BBBB
     {
-      /*
-       * This doesn't match the "dx" output when some of the args are
-       * 64-bit values -- dx only shows the first register.
-       */
-      for (i = 0; i < (int)pDecInsn->vA; i++) {
-        if (i == 0) {
-          // Modified Tool
-          tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
-          
-          // Modified Tool
-          tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
-          
-        }
-      }
-      if (pDecInsn->opCode == OP_FILLED_NEW_ARRAY_RANGE) {
-        // Modified Tool
-        tc_str_format(buff_str, "}, %s // class@%04x",
-                      getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
-        
-      } else {
-        FieldMethodInfo methInfo;
-        if (getMethodInfo(pDexFile, pDecInsn->vB, &methInfo)) {
-          // Modified Tool
-          tc_str_format(buff_str, "}, %s.%s:%s // method@%04x",
-                        methInfo.classDescriptor, methInfo.name,
-                        methInfo.signature, pDecInsn->vB);
-          
-        } else {
-          // Modified Tool
-          tc_str_format(buff_str, "}, ??? // method@%04x", pDecInsn->vB);
-          
-        }
+      if (pDecInsn->opCode != OP_FILLED_NEW_ARRAY_RANGE) {
+				try
+				{
+					auto const method_idx = pDecInsn->vB;
+          opt_called_method_info =
+            TreeConstructor::get_method_info(*pDexFile, method_idx);
+				}
+				catch(std::range_error const& e) {}
       }
       break;
     } 
@@ -937,6 +899,7 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
         TreeConstructor::Node(method_base_addr,
                               instr_size,
                               instr_opcode,
+															opt_called_method_info,
                               internal_offset,
                               arg_offset);
   
@@ -946,9 +909,8 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
 /*
  * Dump a bytecode disassembly.
  */
-std::pair<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr> dumpBytecodes(
-		DexFile *pDexFile,
-	 	const DexMethod *pDexMethod) 
+std::pair<id_node_pair, std::vector<TreeConstructor::NodeSPtr>>
+dumpBytecodes(DexFile *pDexFile, const DexMethod *pDexMethod) 
 {
   const DexCode* pCode = dexGetCode(pDexFile, pDexMethod);
   const u2* insns;
@@ -1008,35 +970,36 @@ std::pair<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr> dumpBytecodes(
 
   auto const method_info =
       TreeConstructor::get_method_info(*pDexFile, pDexMethod->methodIdx);
+	auto const call_nodes = TreeConstructor::get_method_call_nodes(node_vector);
   auto const nodeptr = TreeConstructor::construct_node_from_vec(node_vector);
-	Fmt::Dot::dump_tree(*nodeptr);
-
+  Fmt::Dot::dump_tree(*nodeptr);
   free(className);
 
-	return std::make_pair(method_info, nodeptr);
+	auto const methodid_node_pair = std::make_pair(method_info, nodeptr);
+	return std::make_pair(methodid_node_pair, call_nodes);
 }
 
 /*
  * Dump a "code" struct.
  */
-std::pair<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr> dumpCode(
-		DexFile* pDexFile,
-	 	const DexMethod* pDexMethod)
+std::pair<id_node_pair, std::vector<TreeConstructor::NodeSPtr>>
+dumpCode(DexFile *pDexFile, const DexMethod *pDexMethod) 
 {
-    const DexCode* pCode = dexGetCode(pDexFile, pDexMethod);
+  const DexCode *pCode = dexGetCode(pDexFile, pDexMethod);
 
-    if (gOptions.disassemble)
-			return dumpBytecodes(pDexFile, pDexMethod);
-    else
-      throw std::runtime_error("Could not dump byte_code for method_id " +
-                               std::to_string(pDexMethod->methodIdx));
+  if (gOptions.disassemble)
+    return dumpBytecodes(pDexFile, pDexMethod);
+  else
+    throw std::runtime_error("Could not dump byte_code for method_id " +
+                             std::to_string(pDexMethod->methodIdx));
 }
 
 /*
  * Dump a method.
  */
-std::pair<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr>
-dumpMethod(DexFile *pDexFile, const DexMethod *pDexMethod, int i) {
+std::pair<id_node_pair, std::vector<TreeConstructor::NodeSPtr>>
+dumpMethod(DexFile *pDexFile, const DexMethod *pDexMethod, int i) 
+{
   if (gOptions.exportsOnly &&
       (pDexMethod->accessFlags & (ACC_PUBLIC | ACC_PROTECTED)) == 0) {
     throw std::runtime_error("Could not access method with method_idx: " +
@@ -1090,7 +1053,9 @@ void dumpIField(const DexFile* pDexFile, const DexField* pIField, int i)
  * If "*pLastPackage" is nullptr or does not match the current class' package,
  * the value will be replaced with a newly-allocated string.
  */
-std::map<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr> dumpClass(
+std::pair<std::map<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr>,
+          std::vector<TreeConstructor::NodeSPtr>>
+dumpClass(
 		DexFile *pDexFile,
 	 	int idx,
 	 	char **pLastPackage) 
@@ -1106,6 +1071,7 @@ std::map<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr> dumpClass(
   int i;
 
   std::map<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr> ret;
+	std::vector<TreeConstructor::NodeSPtr> call_node_vec;
 
   pClassDef = dexGetClassDef(pDexFile, idx);
 
@@ -1115,7 +1081,7 @@ std::map<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr> dumpClass(
   if (pClassData == nullptr) {
     free(pClassData);
     free(accessStr);
-		return ret;
+    return std::make_pair(ret, call_node_vec);
   }
 
   classDescriptor = dexStringByTypeIdx(pDexFile, pClassDef->classIdx);
@@ -1172,22 +1138,26 @@ std::map<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr> dumpClass(
 
   pInterfaces = dexGetInterfacesList(pDexFile, pClassDef);
 
-  for (i = 0; i < (int)pClassData->header.directMethodsSize; i++) {
-		try
+  for (i = 0; i < (int)pClassData->header.directMethodsSize; i++) 
+	{
+    try 
 		{
-			auto const pair = dumpMethod(pDexFile, &pClassData->directMethods[i], i);
-			ret.emplace(pair.first, pair.second);
-		}
-		catch(std::runtime_error const& e) {}
+      auto const pair = dumpMethod(pDexFile, &pClassData->directMethods[i], i);
+      ret.emplace(pair.first.first, pair.first.second);
+      call_node_vec.insert(call_node_vec.end(), pair.second.begin(),
+                           pair.second.end());
+    } catch (std::runtime_error const &e) {}
   }
 
-  for (i = 0; i < (int)pClassData->header.virtualMethodsSize; i++) {
-		try
+  for (i = 0; i < (int)pClassData->header.virtualMethodsSize; i++) 
+	{
+    try 
 		{
-			auto const pair = dumpMethod(pDexFile, &pClassData->virtualMethods[i], i);
-			ret.emplace(pair.first, pair.second);
-		}
-		catch (std::runtime_error const& e) {}
+      auto const pair = dumpMethod(pDexFile, &pClassData->virtualMethods[i], i);
+      ret.emplace(pair.first.first, pair.first.second);
+      call_node_vec.insert(call_node_vec.end(), pair.second.begin(),
+                           pair.second.end());
+    } catch (std::runtime_error const &e) {}
   }
 
   // TODO: Annotations.
@@ -1197,7 +1167,7 @@ std::map<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr> dumpClass(
   else
     fileName = "unknown";
 
-	return ret;
+  return std::make_pair(ret, call_node_vec);
 }
 
 
@@ -1397,17 +1367,26 @@ void processDexFile(const char *fileName, DexFile *pDexFile)
 	// Construct {method, node} map for each method in the program.
   std::map<TreeConstructor::MethodInfo, TreeConstructor::NodeSPtr>
       method_node_map;
-  for (i = 0; i < (int)pDexFile->pHeader->classDefsSize; i++) {
+  std::vector<TreeConstructor::NodeSPtr> call_node_vec;
+  for (i = 0; i < (int)pDexFile->pHeader->classDefsSize; i++)
+  {
     if (gOptions.showSectionHeaders)
       dumpClassDef(pDexFile, i);
 
-    auto const class_map = dumpClass(pDexFile, i, &package);
+    auto const pair = dumpClass(pDexFile, i, &package);
+    auto const class_map = pair.first;
+    auto const node_vec = pair.second;
+    
     method_node_map.insert(class_map.begin(), class_map.end());
+    call_node_vec.insert(call_node_vec.end(), node_vec.begin(), node_vec.end());
   }
 
   // Now that we have all the methods, we can resolve CALL instructions.
+  TreeConstructor::process_calls(method_node_map, call_node_vec);
 	
 	// Dump result using given format
+  for (auto const& pair : method_node_map)
+    //Fmt::Dot::dump_tree(*(pair.second));
 
   /* free the last one allocated */
   if (package != nullptr) {
