@@ -383,7 +383,7 @@ ZipEntry dexZipFindEntry(const ZipArchive* pArchive, const char* entryName)
             memcmp(pArchive->mHashTable[ent].name, entryName, nameLen) == 0)
         {
             /* match */
-            return (ZipEntry) (ent + kZipEntryAdj);
+            return (ZipEntry) (intptr_t) (ent + kZipEntryAdj);
         }
 
         ent = (ent + 1) & (hashTableSize-1);

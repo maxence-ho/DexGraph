@@ -527,221 +527,45 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
 	const DecodedInstruction* pDecInsn)
 {
 	// Modified Tool
-	auto const margin_str = std::string(4, ' ');
-	std::string buff_str;
   std::vector<uint32_t> arg_offset;
   uint32_t payload_offset = 0;
 	TreeConstructor::MethodInfo opt_called_method_info;
 
-  const u2* insns = pCode->insns;
-  int i;
+  u2 const* insns = pCode->insns;
 
-  switch (dexGetInstrFormat(gInstrFormat, pDecInsn->opCode)) {
-  case kFmt10x: // op
-    break;
-  case kFmt12x: // op vA, vB
-  {
-    // Modified Tool
-    tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
-    break;
-    } 
-    case kFmt11n:        // op vA, #+B
-    {
-      // Modified Tool
-      tc_str_format(buff_str, " v%d, #int %d // #%x", pDecInsn->vA,
-                    (s4)pDecInsn->vB, (u1)pDecInsn->vB);
-      break;
-    }
-    case kFmt11x: // op vAA
-    {
-      // Modified Tool
-      tc_str_format(buff_str, " v%d", pDecInsn->vA);
-      break;
-    }
-    case kFmt10t:        // op +AA
-    case kFmt20t:        // op +AAAA
+  switch (dexGetInstrFormat(gInstrFormat, pDecInsn->opCode)) 
+	{
+    case kFmt10t: case kFmt20t:    // op+AAcase  // op +AAAA
     {
       s4 targ = (s4)pDecInsn->vA;
-      // Modified Tool
-      tc_str_format(buff_str, " %04x // %c%04x", insnIdx + targ,
-                    (targ < 0) ? '-' : '+', (targ < 0) ? -targ : targ);
       arg_offset.push_back(insnIdx + targ);
-      break;
-    }
-    case kFmt22x: // op vAA, vBBBB
-    {
-      // Modified Tool
-      tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB);
-      
       break;
     }
     case kFmt21t: // op vAA, +BBBB
     {
       s4 targ = (s4)pDecInsn->vB;
-      // Modified Tool
-      tc_str_format(buff_str, " v%d, %04x // %c%04x", pDecInsn->vA,
-                    insnIdx + targ, (targ < 0) ? '-' : '+',
-                    (targ < 0) ? -targ : targ);
       arg_offset.push_back(insnIdx + targ);
-      break;
-    }
-    case kFmt21s: // op vAA, #+BBBB
-    {
-      // Modified Tool
-      tc_str_format(buff_str, " v%d, #int %d // #%x", pDecInsn->vA,
-                    (s4)pDecInsn->vB, (u2)pDecInsn->vB);
-      break;
-    }
-    case kFmt21h: // op vAA, #+BBBB0000[00000000]
-    {
-      // The printed format varies a bit based on the actual opcode.
-      if (pDecInsn->opCode == OP_CONST_HIGH16) {
-        s4 value = pDecInsn->vB << 16;
-        // Modified Tool
-        tc_str_format(buff_str, " v%d, #int %d // #%x", pDecInsn->vA, value,
-                      (u2)pDecInsn->vB);
-        
-      } else {
-        s8 value = ((s8)pDecInsn->vB) << 48;
-        // Modified Tool
-        tc_str_format(buff_str, " v%d, #long %lld // #%x", pDecInsn->vA, value,
-                      (u2)pDecInsn->vB);
-        
-      }
-      break;
-    }
-    case kFmt21c: // op vAA, thing@BBBB
-    {
-      if (pDecInsn->opCode == OP_CONST_STRING) {
-        // Modified Tool
-        tc_str_format(buff_str, " v%d, \"%s\" // string@%04x", pDecInsn->vA,
-                      dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
-        
-      } else if (pDecInsn->opCode == OP_CHECK_CAST ||
-                 pDecInsn->opCode == OP_NEW_INSTANCE ||
-                 pDecInsn->opCode == OP_CONST_CLASS) {
-        // Modified Tool
-        tc_str_format(buff_str, " v%d, %s // class@%04x", pDecInsn->vA,
-                      getClassDescriptor(pDexFile, pDecInsn->vB), pDecInsn->vB);
-        
-      } else /* OP_SGET* */ {
-        FieldMethodInfo fieldInfo;
-        if (getFieldInfo(pDexFile, pDecInsn->vB, &fieldInfo)) {
-          // Modified Tool
-          tc_str_format(buff_str, " v%d, %s.%s:%s // field@%04x", pDecInsn->vA,
-                        fieldInfo.classDescriptor, fieldInfo.name,
-                        fieldInfo.signature, pDecInsn->vB);
-          
-        } else {
-          // Modified Tool
-          tc_str_format(buff_str, " v%d, ??? // field@%04x", pDecInsn->vA,
-                        pDecInsn->vB);
-          
-        }
-      }
-      break;
-    }
-    case kFmt23x: // op vAA, vBB, vCC
-    {
-      // Modified Tool
-      tc_str_format(buff_str, " v%d, v%d, v%d", pDecInsn->vA, pDecInsn->vB,
-                    pDecInsn->vC);
-      break;
-    }
-    case kFmt22b: // op vAA, vBB, #+CC
-    {
-      // Modified Tool
-      tc_str_format(buff_str, " v%d, v%d, #int %d // #%02x", pDecInsn->vA,
-                    pDecInsn->vB, (s4)pDecInsn->vC, (u1)pDecInsn->vC);
-      arg_offset.push_back((s4)pDecInsn->vC);
       break;
     }
     case kFmt22t: // op vA, vB, +CCCC
     {
       s4 targ = (s4)pDecInsn->vC;
-      // Modified Tool
-      tc_str_format(buff_str, " v%d, v%d, %04x // %c%04x", pDecInsn->vA,
-                    pDecInsn->vB, insnIdx + targ, (targ < 0) ? '-' : '+',
-                    (targ < 0) ? -targ : targ);
       arg_offset.push_back(insnIdx + targ);
       break;
     }
     case kFmt22s: // op vA, vB, #+CCCC
     {
-      // Modified Tool
-      tc_str_format(buff_str, " v%d, v%d, #int %d // #%04x", pDecInsn->vA,
-                    pDecInsn->vB, (s4)pDecInsn->vC, (u2)pDecInsn->vC);
       arg_offset.push_back((s4)pDecInsn->vC);
-      break;
-    }
-    case kFmt22c: // op vA, vB, thing@CCCC
-    {
-      if (pDecInsn->opCode >= OP_IGET && pDecInsn->opCode <= OP_IPUT_SHORT) {
-        FieldMethodInfo fieldInfo;
-        if (getFieldInfo(pDexFile, pDecInsn->vC, &fieldInfo)) {
-          // Modified Tool
-          tc_str_format(buff_str, " v%d, v%d, %s.%s:%s // field@%04x",
-                        pDecInsn->vA, pDecInsn->vB, fieldInfo.classDescriptor,
-                        fieldInfo.name, fieldInfo.signature, pDecInsn->vC);
-        } else {
-          // Modified Tool
-          tc_str_format(buff_str, " v%d, v%d, ??? // field@%04x", pDecInsn->vA,
-                        pDecInsn->vB, pDecInsn->vC);
-        }
-      } else {
-        // Modified Tool
-        tc_str_format(buff_str, " v%d, v%d, %s // class@%04x", pDecInsn->vA,
-                      pDecInsn->vB, getClassDescriptor(pDexFile, pDecInsn->vC),
-                      pDecInsn->vC); 
-      }
       break;
     }
     case kFmt22cs: // [opt] op vA, vB, field offset CCCC
     {
-      // Modified Tool
-      tc_str_format(buff_str, " v%d, v%d, [obj+%04x]", pDecInsn->vA,
-                    pDecInsn->vB, pDecInsn->vC);
       arg_offset.push_back(pDecInsn->vC);
-      break;
-    }
-    case kFmt30t:
-    {
-      // Modified Tool
-      tc_str_format(buff_str, " #%08x", pDecInsn->vA);
-      break;
-    }
-    case kFmt31i: // op vAA, #+BBBBBBBB
-    {
-      /* this is often, but not always, a float */
-      union {
-        float f;
-        u4 i;
-      } conv;
-      conv.i = pDecInsn->vB;
-      // Modified Tool
-      tc_str_format(buff_str, " v%d, #float %f // #%08x", pDecInsn->vA, conv.f,
-                    pDecInsn->vB);
-      break;
-    }
-    case kFmt31c: // op vAA, thing@BBBBBBBB
-    {
-      // Modified Tool
-      tc_str_format(buff_str, " v%d, \"%s\" // string@%08x", pDecInsn->vA,
-                    dexStringById(pDexFile, pDecInsn->vB), pDecInsn->vB);
       break;
     }
     case kFmt31t: // op vAA, offset +BBBBBBBB
     {
-      // Modified Tool
-      tc_str_format(buff_str, " v%d, %08x // +%08x", pDecInsn->vA,
-                    insnIdx + pDecInsn->vB, pDecInsn->vB);
       payload_offset = insnIdx + pDecInsn->vB;
-      break;
-    }
-    case kFmt32x: // op vAAAA, vBBBB
-    {
-      // Modified Tool
-      tc_str_format(buff_str, " v%d, v%d", pDecInsn->vA, pDecInsn->vB); 
       break;
     }
     case kFmt35c: // op vB, {vD, vE, vF, vG, vA}, thing@CCCC
@@ -757,23 +581,6 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       }
       break;
     }
-    case kFmt35ms:       // [opt] invoke-virtual+super
-    case kFmt35fs:       // [opt] invoke-interface
-    {
-      for (i = 0; i < (int)pDecInsn->vA; i++) {
-        if (i == 0) {
-          // Modified Tool
-          tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
-        } else {
-          // Modified Tool
-          tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
-        }
-      }
-      // Modified Tool
-      tc_str_format(buff_str, "}, [%04x] // vtable #%04x", pDecInsn->vB,
-                    pDecInsn->vB);
-      
-    } break;
     case kFmt3rc: // op {vCCCC .. v(CCCC+AA-1)}, meth@BBBB
     {
       if (pDecInsn->opCode != OP_FILLED_NEW_ARRAY_RANGE) {
@@ -787,123 +594,49 @@ TreeConstructor::Node dumpInstruction(DexFile* pDexFile,
       }
       break;
     } 
-    case kFmt3rms:       // [opt] invoke-virtual+super/range
-    case kFmt3rfs:       // [opt] invoke-interface/range
-    {
-      /*
-       * This doesn't match the "dx" output when some of the args are
-       * 64-bit values -- dx only shows the first register.
-       */
-      for (i = 0; i < (int)pDecInsn->vA; i++) {
-        if (i == 0) {
-          // Modified Tool
-          tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
-        } else {
-          // Modified Tool
-          tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
-        }
-      }
-      // Modified Tool
-      tc_str_format(buff_str, "}, [%04x] // vtable #%04x", pDecInsn->vB,
-                    pDecInsn->vB);
-      
-      break;
-    } 
-    case kFmt3rinline: // [opt] execute-inline/range
-    {
-      for (i = 0; i < (int)pDecInsn->vA; i++) {
-        if (i == 0) {
-          // Modified Tool
-          tc_str_format(buff_str, "v%d", pDecInsn->vC + i);
-        } else {
-          // Modified Tool
-          tc_str_format(buff_str, ", v%d", pDecInsn->vC + i);
-        }
-      }
-      // Modified Tool
-      tc_str_format(buff_str, "}, [%04x] // inline #%04x", pDecInsn->vB,
-                    pDecInsn->vB);
-      break;
-    } 
-    case kFmt3inline: // [opt] inline invoke
-    {
-      for (i = 0; i < (int)pDecInsn->vA; i++) {
-        if (i == 0) {
-          // Modified Tool
-          tc_str_format(buff_str, "v%d", pDecInsn->arg[i]);
-        } else {
-          // Modified Tool
-          tc_str_format(buff_str, ", v%d", pDecInsn->arg[i]);
-        }
-      }
-      // Modified Tool
-      tc_str_format(buff_str, "}, [%04x] // inline #%04x", pDecInsn->vB,
-                    pDecInsn->vB);
-      break;
-    } 
-    case kFmt51l: // op vAA, #+BBBBBBBBBBBBBBBB
-    {
-      /* this is often, but not always, a double */
-      union {
-        double d;
-        u8 j;
-      } conv;
-      conv.j = pDecInsn->vB_wide;
-      // Modified Tool
-      tc_str_format(buff_str, " v%d, #double %f // #%016llx", pDecInsn->vA,
-                    conv.d, pDecInsn->vB_wide);
-      break;
-    } 
-    case kFmtUnknown:
-        break;
-    default: 
-    {
-      // Modified Tool
-      tc_str_format(buff_str, " ???");
-      break;
-    }
-    }
+    default: break;
+	}
    
-    // Get relevant addresses
-    intptr_t const method_base_addr = ((u1*)insns - pDexFile->baseAddr) + insnIdx * 2;
-    // Get Instruction size
-    auto const instr_size = insnWidth;
-    // Get OpCode
-    auto const instr_opcode = pDecInsn->opCode;
-    // Get Offset (relative to method base address)
-    int const internal_offset = insnIdx;
+	// Get relevant addresses
+	intptr_t const method_base_addr = ((u1*)insns - pDexFile->baseAddr) + insnIdx * 2;
+	// Get Instruction size
+	auto const instr_size = insnWidth;
+	// Get OpCode
+	auto const instr_opcode = pDecInsn->opCode;
+	// Get Offset (relative to method base address)
+	int const internal_offset = insnIdx;
 
-    /// Additional processing for Switch instructions
-    if (instr_opcode == OpCode::OP_PACKED_SWITCH)
-    {
-      intptr_t const payload_addr = (intptr_t const)(insns + payload_offset);
-      auto const packed_switch_payload =
-          TreeConstructor::get_packed_switch_payload(internal_offset,
-                                                     payload_addr);
-      for (auto const& offset : packed_switch_payload.targets)
-        arg_offset.push_back(offset);
-    }
+	/// Additional processing for Switch instructions
+	if (instr_opcode == OpCode::OP_PACKED_SWITCH)
+	{
+		intptr_t const payload_addr = (intptr_t const)(insns + payload_offset);
+		auto const packed_switch_payload =
+				TreeConstructor::get_packed_switch_payload(internal_offset,
+																									 payload_addr);
+		for (auto const& offset : packed_switch_payload.targets)
+			arg_offset.push_back(offset);
+	}
 
-    if (instr_opcode == OpCode::OP_SPARSE_SWITCH)
-    {
-      auto const payload_addr = (intptr_t const)(insns + payload_offset);
-      auto const sparse_switch_payload =
-          TreeConstructor::get_sparse_switch_offsets(internal_offset,
-                                                     payload_addr);
-      for (auto const& offset : sparse_switch_payload.targets)  
-        arg_offset.push_back(offset);
-    }
+	if (instr_opcode == OpCode::OP_SPARSE_SWITCH)
+	{
+		auto const payload_addr = (intptr_t const)(insns + payload_offset);
+		auto const sparse_switch_payload =
+				TreeConstructor::get_sparse_switch_offsets(internal_offset,
+																									 payload_addr);
+		for (auto const& offset : sparse_switch_payload.targets)  
+			arg_offset.push_back(offset);
+	}
 
-    // Construct Tree Node
-    auto method_node =
-        TreeConstructor::Node(method_base_addr,
-                              instr_size,
-                              instr_opcode,
-															opt_called_method_info,
-                              internal_offset,
-                              arg_offset);
-  
-    return method_node;
+	// Construct Tree Node
+	auto method_node =
+			TreeConstructor::Node(method_base_addr,
+														instr_size,
+														instr_opcode,
+														opt_called_method_info,
+														internal_offset,
+														arg_offset);
+
+	return method_node;
 }
 
 /*
@@ -972,7 +705,6 @@ dumpBytecodes(DexFile *pDexFile, const DexMethod *pDexMethod)
       TreeConstructor::get_method_info(*pDexFile, pDexMethod->methodIdx);
 	auto const call_nodes = TreeConstructor::get_method_call_nodes(node_vector);
   auto const nodeptr = TreeConstructor::construct_node_from_vec(node_vector);
-  Fmt::Dot::dump_tree(*nodeptr);
   free(className);
 
 	auto const methodid_node_pair = std::make_pair(method_info, nodeptr);
@@ -1265,11 +997,6 @@ void dumpMethodMap(DexFile* pDexFile, const DexMethod* pDexMethod, int idx,
         addr = *data++;
         if (addrWidth > 1)
           addr |= (*data++) << 8;
-
-        for (byte = 0; byte < regWidth; byte++) 
-				{
-          *data++;
-        }
       }
     }
 
@@ -1386,7 +1113,7 @@ void processDexFile(const char *fileName, DexFile *pDexFile)
 	
 	// Dump result using given format
   for (auto const& pair : method_node_map)
-    //Fmt::Dot::dump_tree(*(pair.second));
+    Fmt::Dot::dump_tree(*(pair.second));
 
   /* free the last one allocated */
   if (package != nullptr) {
