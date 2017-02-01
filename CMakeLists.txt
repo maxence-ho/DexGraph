@@ -8,7 +8,7 @@ include_directories(
 )
 
 set ( HEADERS
-  include/Dexdump/OpCodeNames.h
+  include/dexdump/OpCodeNames.h
   include/libdex/CmdUtils.h
   include/libdex/DexCatch.h
   include/libdex/DexClass.h
@@ -34,8 +34,8 @@ set ( HEADERS
 )
 
 set( SOURCES
-  src/Dexdump/DexDump.cpp
-  src/Dexdump/OpCodenames.cpp
+  src/dexdump/DexDump.cpp
+  src/dexdump/OpCodenames.cpp
   src/libdex/CmdUtils.cpp
   src/libdex/DexCatch.cpp
   src/libdex/DexClass.cpp
