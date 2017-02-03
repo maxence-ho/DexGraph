@@ -9,22 +9,14 @@ void tc_binary_print(std::ofstream & file, std::string const& str)
     file.write(str.c_str(), str.size());
 }
 
-void tc_binary_print(std::ofstream & file, uint64_t const& enum_int)
+template <typename IntType>
+void tc_int_binary_print(std::ofstream & file, IntType const& enum_int)
 {
   if (file.good())
   {
     auto const to_write = reinterpret_cast<const char*>(&enum_int);
     file.write(to_write,
-               sizeof(uint64_t));
-  }
-}
-
-void tc_binary_print(std::ofstream & file, uint32_t const& enum_int)
-{
-  if (file.good())
-  {
-    auto const to_write = reinterpret_cast<const char*>(&enum_int);
-    file.write(to_write, sizeof(uint32_t));
+               sizeof(IntType));
   }
 }
 
@@ -67,13 +59,15 @@ namespace Edg
   {
     auto const node_count = (uint32_t)nodesptr_vec.size();
     std::ofstream file("graph.edg", std::ios::app | std::ios::binary);
-    tc_binary_print(file, node_count);
+    tc_int_binary_print<uint32_t>(file, node_count);
     
     for (auto const& nodesptr : nodesptr_vec)
     {
+      if (nodesptr == nullptr)
+        break;
       tc_binary_print(file, "n");
-      tc_binary_print(file, (uint64_t)nodesptr->baseAddr);
-      tc_binary_print(file, static_cast<uint32_t>(nodesptr->opcode_type));
+      tc_int_binary_print<uint64_t>(file, (uint64_t)nodesptr->baseAddr);
+      tc_int_binary_print<uint32_t>(file, static_cast<uint32_t>(nodesptr->opcode_type));
     }
     file.close();
   }
@@ -86,9 +80,12 @@ namespace Edg
     std::ofstream file("graph.edg", std::ios::app | std::ios::binary);
     for (auto const& pair : edges_vec)
     {
+      if (pair.first == nullptr || pair.second == nullptr)
+        break;
+      
       tc_binary_print(file, "e");
-      tc_binary_print(file, (uint64_t)pair.first->baseAddr);
-      tc_binary_print(file, (uint64_t)pair.second->baseAddr);
+      tc_int_binary_print<uint64_t>(file, (uint64_t)pair.first->baseAddr);
+      tc_int_binary_print<uint64_t>(file, (uint64_t)pair.second->baseAddr);
     }
     file.close();
   }
@@ -98,8 +95,8 @@ namespace Edg
       std::vector<std::pair<TreeConstructor::NodeSPtr,
                             TreeConstructor::NodeSPtr>> const& edges_vec)
   {
-   dump_node_vec(nodesptr_vec);
-   dump_edge_vec(edges_vec);
+    dump_node_vec(nodesptr_vec);
+    dump_edge_vec(edges_vec);
   }
 }
 }

@@ -1113,17 +1113,14 @@ void processDexFile(const char *fileName, DexFile *pDexFile)
   TreeConstructor::process_calls(method_node_map, call_node_vec);
 	
 	// Dump result using given format
-/*
   for (auto const& pair : method_node_map)
     Fmt::Dot::dump_tree(*(pair.second));
-*/
   
   std::vector<TreeConstructor::NodeSPtr> nodesptr_vec;
   std::vector<std::pair<TreeConstructor::NodeSPtr,
                         TreeConstructor::NodeSPtr>> edges_vec;
   for (auto const& pair: method_node_map)
   {
-    
     std::vector<TreeConstructor::NodeSPtr> current_nodesptr_vec;
     std::vector<std::pair<TreeConstructor::NodeSPtr,
                           TreeConstructor::NodeSPtr>> current_edges_vec;

@@ -47,6 +47,13 @@ namespace
                             std::vector<NodeSPtr> & visited_nodeptr_vec,
                             NodeSPtr & current_node)
   {
+    if (current_node->next_nodes.empty())
+    {
+      if (!find<NodeSPtr>(visiting_nodeptr_stack, current_node))
+        visiting_nodeptr_stack.push_back(current_node);
+      return;
+    }
+    
     do
     {
       if (!find<NodeSPtr>(visiting_nodeptr_stack, current_node))
@@ -102,6 +109,8 @@ namespace
   get_next_unvisited_child(std::vector<NodeSPtr> &visiting_nodeptr_stack,
                            std::vector<NodeSPtr> &visited_nodeptr_vec) 
 	{
+    if (visiting_nodeptr_stack.back()->next_nodes.empty())
+      return nullptr;
     auto const children_next_nodes = visiting_nodeptr_stack.back()->next_nodes;
     auto next_child_it = std::find_if(
         children_next_nodes.begin(), children_next_nodes.end(),
@@ -207,10 +216,6 @@ std::string dot_traversal(Node const& node,
   // and set current = current->left until no child
   do
   {
-    // Lonely Nodes
-    if (current_node->next_nodes.empty())
-      break;
-   
     left_traversal_stack(visiting_nodeptr_stack, 
                          visited_nodeptr_vec,
                          current_node);
@@ -266,11 +271,7 @@ binary_traversal(Node const& node, BinaryFmtLambda dump_format_method)
   // and set current = current->left until no child
   do
   {
-    // Lonely Nodes
-    if (current_node->next_nodes.empty())
-      break;
-   
-    left_traversal_stack(visiting_nodeptr_stack, 
+    left_traversal_stack(visiting_nodeptr_stack,
                          visited_nodeptr_vec,
                          current_node);
     
