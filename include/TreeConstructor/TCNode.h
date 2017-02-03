@@ -37,8 +37,12 @@ struct Node
 };
 
 typedef std::function<std::string(NodeSPtr const&)> FmtLambda;
+typedef std::function<std::pair<NodeSPtr, std::vector<std::pair<NodeSPtr, NodeSPtr>>>(NodeSPtr const&)> BinaryFmtLambda;
 std::string dot_traversal(Node const& node,
                           FmtLambda dump_format_method);
+std::pair<std::vector<NodeSPtr>, std::vector<std::pair<NodeSPtr, NodeSPtr>>>
+binary_traversal(Node const& node, BinaryFmtLambda dump_format_method);
+
 
 NodeSPtr construct_node_from_vec(std::vector<NodeSPtr> const &nodeptr_vector);
 

@@ -82,9 +82,26 @@ namespace
     }
   }
 
-  NodeSPtr get_next_unvisited_child(std::vector<NodeSPtr> & visiting_nodeptr_stack,
-                                    std::vector<NodeSPtr> & visited_nodeptr_vec)
-  {
+	std::pair<NodeSPtr, std::vector<std::pair<NodeSPtr, NodeSPtr>>>
+  binary_destack_and_dump_node(std::vector<NodeSPtr> &visiting_nodeptr_stack,
+                               std::vector<NodeSPtr> &visited_nodeptr_vec,
+                               BinaryFmtLambda dump_format_method)
+	{
+		std::pair<NodeSPtr, std::vector<std::pair<NodeSPtr, NodeSPtr>>> pair;
+    auto const popped_node = visiting_nodeptr_stack.back();
+    visiting_nodeptr_stack.pop_back();
+    if (!find<NodeSPtr>(visited_nodeptr_vec, popped_node))
+    {
+      pair = dump_format_method(popped_node); // Visitor operation
+      visited_nodeptr_vec.push_back(popped_node);
+    }
+		return pair; 
+	}
+
+  NodeSPtr
+  get_next_unvisited_child(std::vector<NodeSPtr> &visiting_nodeptr_stack,
+                           std::vector<NodeSPtr> &visited_nodeptr_vec) 
+	{
     auto const children_next_nodes = visiting_nodeptr_stack.back()->next_nodes;
     auto next_child_it = std::find_if(
         children_next_nodes.begin(), children_next_nodes.end(),
@@ -120,6 +137,20 @@ namespace
       current_node = visiting_nodeptr_stack.back();
   }
 
+  std::pair<NodeSPtr, std::vector<std::pair<NodeSPtr, NodeSPtr>>>
+  binary_process_cuttedfeet_node(std::vector<NodeSPtr> &visiting_nodeptr_stack,
+                                 std::vector<NodeSPtr> &visited_nodeptr_vec,
+                                 NodeSPtr &current_node,
+                                 BinaryFmtLambda dump_format_method) 
+	{
+    auto const pair = binary_destack_and_dump_node(
+        visiting_nodeptr_stack, visited_nodeptr_vec, dump_format_method);
+    // Move current_node cursor
+    if (!visiting_nodeptr_stack.empty())
+      current_node = visiting_nodeptr_stack.back();
+		return pair;
+	}
+
   // Called when destacking stop
   // ie. visiting_stack.back() has multiple next_nodes
   void process_multiplefeet_node(std::vector<NodeSPtr> & visiting_nodeptr_stack,
@@ -139,6 +170,29 @@ namespace
                               current_node,
 															dump_format_method);
   }
+
+  std::pair<NodeSPtr, std::vector<std::pair<NodeSPtr, NodeSPtr>>>
+  binary_process_multiplefeet_node(
+      std::vector<NodeSPtr> &visiting_nodeptr_stack,
+      std::vector<NodeSPtr> &visited_nodeptr_vec, NodeSPtr &current_node,
+      BinaryFmtLambda dump_format_method) 
+	{
+    auto const next_child =
+        get_next_unvisited_child(visiting_nodeptr_stack, visited_nodeptr_vec);
+    if (next_child != nullptr)
+		{
+      current_node = next_child;
+      std::pair<NodeSPtr, std::vector<std::pair<NodeSPtr, NodeSPtr>>>
+          empty_pair;
+      return empty_pair;
+		}
+		else
+      return binary_process_cuttedfeet_node(visiting_nodeptr_stack,
+                                            visited_nodeptr_vec,
+																					 	current_node,
+                                            dump_format_method);
+  }
+
 }
 
 std::string dot_traversal(Node const& node, 
@@ -194,6 +248,84 @@ std::string dot_traversal(Node const& node,
      
   } while (!visiting_nodeptr_stack.empty());
   return dot_ss.str();
+}
+
+std::pair<std::vector<NodeSPtr>, std::vector<std::pair<NodeSPtr, NodeSPtr>>>
+binary_traversal(Node const& node, BinaryFmtLambda dump_format_method) 
+{
+	// ret locals
+	std::vector<NodeSPtr> nodesptr_vec;
+	std::vector<std::pair<NodeSPtr, NodeSPtr>> edges_vec;
+
+  std::stringstream dot_ss;
+  std::vector<NodeSPtr> visiting_nodeptr_stack;
+  std::vector<NodeSPtr> visited_nodeptr_vec;
+  // Step 1: Initialized current node as root
+  NodeSPtr current_node = std::make_shared<Node>(node);
+  // Step 2: Push current node to S 
+  // and set current = current->left until no child
+  do
+  {
+    // Lonely Nodes
+    if (current_node->next_nodes.empty())
+      break;
+   
+    left_traversal_stack(visiting_nodeptr_stack, 
+                         visited_nodeptr_vec,
+                         current_node);
+    
+    // Step 3: If no childs and stack is not empty
+    // a) Pop the top item from the stack
+    // b) Do visitor operation, and set current_node = popped_item->right
+    // c) Go to Step 2
+    while (!visiting_nodeptr_stack.empty()
+      && visiting_nodeptr_stack.back()->next_nodes.size() < 2)
+    {
+      auto const search_visited_it =
+          std::find_if(visited_nodeptr_vec.begin(), visited_nodeptr_vec.end(),
+                       [&](auto const visited_nodesptr) {
+                         return visiting_nodeptr_stack.back()->baseAddr ==
+                                visited_nodesptr->baseAddr;
+                       });
+      if (search_visited_it == std::end(visited_nodeptr_vec)) 
+			{
+        NodeSPtr destacked_node;
+        std::vector<std::pair<NodeSPtr, NodeSPtr>> destacked_egdes_vec;
+        std::tie(destacked_node, destacked_egdes_vec) =
+            binary_destack_and_dump_node(visiting_nodeptr_stack,
+                                         visited_nodeptr_vec,
+                                         dump_format_method);
+        // Update ret vectors
+        nodesptr_vec.push_back(destacked_node);
+        edges_vec.insert(edges_vec.end(), destacked_egdes_vec.begin(),
+                         destacked_egdes_vec.end());
+      }
+		 	else
+        visiting_nodeptr_stack.pop_back();
+    }
+
+    if (!visiting_nodeptr_stack.empty())
+    {
+			NodeSPtr destacked_node;
+			std::vector<std::pair<NodeSPtr, NodeSPtr>> destacked_egdes_vec;
+			std::tie(destacked_node, destacked_egdes_vec) = 
+				binary_process_multiplefeet_node(visiting_nodeptr_stack,
+																				 visited_nodeptr_vec,
+																				 current_node,
+																				 dump_format_method);
+
+			// Update ret vectors
+      if (destacked_node != nullptr)
+      {
+        nodesptr_vec.push_back(destacked_node);
+        edges_vec.insert(edges_vec.end(),
+                         destacked_egdes_vec.begin(),
+                         destacked_egdes_vec.end());
+      }
+    }
+     
+  } while (!visiting_nodeptr_stack.empty());
+  return std::make_pair(nodesptr_vec, edges_vec);
 }
 
 namespace

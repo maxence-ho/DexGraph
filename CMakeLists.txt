@@ -23,6 +23,7 @@ set ( HEADERS
   include/libdex/sha1.h
   include/other/inttypes.h
   include/other/typeof.h
+  include/TreeConstructor/FmtEdg.h
   include/TreeConstructor/FmtDot.h
   include/TreeConstructor/PackedSwitchPayload.h
   include/TreeConstructor/SparseSwitchPayload.h
@@ -50,6 +51,7 @@ set( SOURCES
   src/libdex/sha1.cpp
   src/libdex/SysUtil.cpp
   src/libdex/ZipArchive.cpp
+  src/TreeConstructor/FmtEdg.cpp
   src/TreeConstructor/FmtDot.cpp
   src/TreeConstructor/OpcodeType.cpp
   src/TreeConstructor/TCNode.cpp

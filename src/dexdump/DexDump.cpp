@@ -51,6 +51,7 @@
 
 // Modified Tool
 #include <sstream>
+#include <TreeConstructor/FmtEdg.h>
 #include <TreeConstructor/FmtDot.h>
 #include <TreeConstructor/TCHelper.h>
 #include <TreeConstructor/TCNode.h>
@@ -1112,8 +1113,34 @@ void processDexFile(const char *fileName, DexFile *pDexFile)
   TreeConstructor::process_calls(method_node_map, call_node_vec);
 	
 	// Dump result using given format
+/*
   for (auto const& pair : method_node_map)
     Fmt::Dot::dump_tree(*(pair.second));
+*/
+  
+  std::vector<TreeConstructor::NodeSPtr> nodesptr_vec;
+  std::vector<std::pair<TreeConstructor::NodeSPtr,
+                        TreeConstructor::NodeSPtr>> edges_vec;
+  for (auto const& pair: method_node_map)
+  {
+    
+    std::vector<TreeConstructor::NodeSPtr> current_nodesptr_vec;
+    std::vector<std::pair<TreeConstructor::NodeSPtr,
+                          TreeConstructor::NodeSPtr>> current_edges_vec;
+    std::tie(current_nodesptr_vec, current_edges_vec) =
+      TreeConstructor::binary_traversal(*pair.second,
+                                        Fmt::Edg::dump_single_node);
+    // Update global vecs
+    nodesptr_vec.insert(nodesptr_vec.begin(),
+                        current_nodesptr_vec.begin(),
+                        current_nodesptr_vec.end());
+    edges_vec.insert(edges_vec.begin(),
+                     current_edges_vec.begin(),
+                     current_edges_vec.end());
+  }
+  // Dump all in Edg format
+  Fmt::Edg::dump_all(nodesptr_vec, edges_vec);
+  
 
   /* free the last one allocated */
   if (package != nullptr) {
