@@ -95,6 +95,21 @@ namespace Edg
       std::vector<std::pair<TreeConstructor::NodeSPtr,
                             TreeConstructor::NodeSPtr>> const& edges_vec)
   {
+    for (auto const& node : nodesptr_vec)
+    {
+      auto count = 0;
+      for (auto const& second_loop_node : nodesptr_vec)
+      {
+        if (node == second_loop_node)
+        {
+          count ++;
+        }
+      }
+      if (count > 1)
+      {
+        // break here
+      }
+    }
     dump_node_vec(nodesptr_vec);
     dump_edge_vec(edges_vec);
   }

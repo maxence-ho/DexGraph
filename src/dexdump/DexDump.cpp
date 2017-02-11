@@ -1113,8 +1113,8 @@ void processDexFile(const char *fileName, DexFile *pDexFile)
   TreeConstructor::process_calls(method_node_map, call_node_vec);
 	
 	// Dump result using given format
-  for (auto const& pair : method_node_map)
-    Fmt::Dot::dump_tree(*(pair.second));
+  //for (auto const& pair : method_node_map)
+    //Fmt::Dot::dump_tree(*(pair.second));
   
   std::vector<TreeConstructor::NodeSPtr> nodesptr_vec;
   std::vector<std::pair<TreeConstructor::NodeSPtr,
@@ -1128,9 +1128,17 @@ void processDexFile(const char *fileName, DexFile *pDexFile)
       TreeConstructor::binary_traversal(*pair.second,
                                         Fmt::Edg::dump_single_node);
     // Update global vecs
-    nodesptr_vec.insert(nodesptr_vec.begin(),
-                        current_nodesptr_vec.begin(),
-                        current_nodesptr_vec.end());
+		for (auto const& node : current_nodesptr_vec)
+		{
+			auto const it = std::find_if(nodesptr_vec.begin(),
+                                   nodesptr_vec.end(),
+                                   [&](TreeConstructor::NodeSPtr current_node) -> bool {
+                                     return current_node->baseAddr == node->baseAddr;
+                                   });
+			if (it == std::end(nodesptr_vec))
+				nodesptr_vec.push_back(node);
+		}
+															
     edges_vec.insert(edges_vec.begin(),
                      current_edges_vec.begin(),
                      current_edges_vec.end());
