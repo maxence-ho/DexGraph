@@ -1,6 +1,8 @@
 # DexGraph
 Modified DexDump to build control flow graph from classes.dex
 
+A white paper for this project is available in the project root, [here](https://github.com/ChiminhTT/DexGraph/blob/master/dexgraph-reverse-engineering.pdf)
+
 ## Dependencies
 Dependencies are statically linked, hence they have to be built from sources.
 Dexgraph dependencies are:
