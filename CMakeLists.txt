@@ -59,5 +59,9 @@ set( SOURCES
 )
 
 add_executable(dexgraph ${SOURCES} ${HEADERS})
-target_link_libraries(dexgraph ${CMAKE_SOURCE_DIR}/deps/zlib/libz.a)
+
+find_package(ZLIB)
+target_include_directories(dexgraph PUBLIC ${ZLIB_INCLUDE_DIR})
+target_link_libraries (dexgraph ${ZLIB_LIBRARY})
+
 
